@@ -1,37 +1,40 @@
 <?php
+require_once __DIR__.'/RandomServerData.php';
 
-require_once __DIR__ . '/vendor/autoload.php';
+function generateAndGetRandomServerData(): string
+{
+    $randomServerData = new RandomServerData();
+    $serverData = $randomServerData->generateAndGetRandomServerData();
 
-use app\src\Controllers\CsvGeneratorController;
-use config\Logging;
-use Dotenv\Dotenv;
-
-$dotenv = Dotenv::createImmutable(__DIR__);
-$dotenv->load();
-
-$options = getopt("", ["table:", "rows:", "dailytable::"]);
-
-// Validate options
-if (!isset($options['table']) || !isset($options['rows'])) {
-    echo "Usage: php generate_csv.php --table=<table_name> --rows=<number_of_rows> [--dailytable]\n";
-    exit(1);
+    return json_encode($serverData);
 }
 
-$tablename = $options['table'];
-$rowCount = (int)$options['rows'];
-$dailyTable = isset($options['dailytable']);
-
+function sendResponse(string $response) : void
+{
+    header('Content-Type: application/json');
+    echo $response;
+}
 
 try {
-    $csvGenerator = new CsvGeneratorController($tablename);
-    $csvGenerator->generateData($rowCount, $dailyTable);
-    echo "CSV file generated and uploaded successfully: " . $csvGenerator->getFilePath() . "\n";
-    Logging::logInfo("CSV generated and uploaded successfully: " . $csvGenerator->getFilePath() . "\n");
+    if (!isset($_POST['method'])) {
+        $jsonResponse = json_encode("invalid request");
+        sendResponse($jsonResponse);
+        exit;
+    }
+
+    $method = $_POST['method'];
+    switch ($method) {
+        case 'ss7':
+            $jsonResponse = generateAndGetRandomServerData();
+            sendResponse($jsonResponse);
+            break;
+        default:
+            sendResponse("invalid request");
+            break;
+    }
+
+    exit;
 } catch (Exception $e) {
-    echo "Error: " . $e->getMessage() . "\n";
-    Logging::logError("Error in CSV generation and uploading: " . $e->getMessage());
-    exit(1);
+    echo "operation failed!";
+    exit;
 }
-
-echo 'Memory Usage: ' . memory_get_usage() . ' bytes';
-
