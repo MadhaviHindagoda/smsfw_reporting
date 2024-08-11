@@ -38,8 +38,11 @@ class CsvGeneratorController extends Model
 
     public function generateData($rowCount, $dailyTable )
     {
+        $this->joinedTable();
+
         $fileName = "{$this->tablename}_" . uniqid() .'.csv';
         $this->filePath = $_ENV['FILE_PATH'] . "/{$fileName}" ;
+
 
         $this->csvFile = fopen($this->filePath, 'w');
         $headers = $this->getHeadersOfTable();

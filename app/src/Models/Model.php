@@ -32,6 +32,32 @@ class Model
         
     }
 
+    // public function insertData($tableName, $data) {
+    //     $fields = implode(',', array_keys($data));
+    //     $placeholders = ':' . implode(',:', array_keys($data));
+    
+    //     $query = "INSERT INTO {$tableName} ({$fields}) VALUES ({$placeholders})";
+    
+    //     try {
+    //         $stmt = $this->pdo->prepare($query);
+    //         foreach ($data as $key => $value) {
+    //             $stmt->bindValue(":$key", $value);
+    //         }
+    //         $stmt->execute();
+    //     } catch (PDOException $e) {
+    //         throw new Exception("Error inserting data: " . $e->getMessage());
+    //     }
+    // }
+
+    // public function dataExists($tableName, $field, $value) {
+    //     $query = "SELECT COUNT(*) FROM {$tableName} WHERE {$field} = :value";
+    //     $stmt = $this->pdo->prepare($query);
+    //     $stmt->bindValue(':value', $value);
+    //     $stmt->execute();
+    //     return $stmt->fetchColumn() > 0;
+
+        
+    // }
     public function insertData($tableName, $data) {
         $fields = implode(',', array_keys($data));
         $placeholders = ':' . implode(',:', array_keys($data));
@@ -55,11 +81,17 @@ class Model
         $stmt->bindValue(':value', $value);
         $stmt->execute();
         return $stmt->fetchColumn() > 0;
-
-        
     }
 
-
-
+    // New method to get existing node IDs
+    public function getExistingNodeIds() {
+        $tableName = 'nodes';
+        $query = "SELECT id FROM {$tableName}";
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_COLUMN, 0); // Fetch IDs as a single column array
+    }
 }
+
+
 
