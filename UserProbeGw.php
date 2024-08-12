@@ -71,6 +71,18 @@ try {
             // Output the XML
             echo $xmlCode->asXML();
             break;
+        case 'lock_psp':
+
+            echo 1;
+            break;
+        case 'unlock_psp':
+           
+            echo 1;
+            break;
+        case 'reset':
+           
+            echo 1;
+            break;
         default:
             header('Content-Type: application/json');
             $jsonResponse = json_encode("invalid request");
