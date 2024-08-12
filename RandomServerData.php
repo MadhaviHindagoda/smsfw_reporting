@@ -14,6 +14,8 @@ class RandomServerData
     private $smsmoLimit;
     private $smsmtLimit;
     private $smppLimit;
+    private $internationalLimit;
+    private $localLimit; 
 
     function __construct()
     {
@@ -21,6 +23,8 @@ class RandomServerData
         $this->smsmoLimit = $_ENV['SMSMO_LIMIT'];
         $this->smsmtLimit = $_ENV['SMSMT_LIMIT'];
         $this->smppLimit = $_ENV['SMPP_LIMIT'];
+        $this->internationalLimit = $_ENV['INTERNATIONAL_LIMIT'];
+        $this->localLimit = $_ENV['LOCAL_LIMIT'];
     }
 
     private function getRelatedClass($part): string
@@ -44,6 +48,8 @@ class RandomServerData
         $smsmo = $this->faker->randomFloat(2, 0, $this->smsmoLimit);
         $smsmt = $this->faker->randomFloat(2, 0, $this->smsmtLimit);
         $smpp = $this->faker->randomFloat(2, 0, $this->smppLimit);
+        $international = $this->faker->randomFloat(2, 0, $this->internationalLimit);
+        $local = $this->faker->randomFloat(2, 0, $this->localLimit);
 
         $count_cdr = $this->faker->numberBetween(0, 2);
         $count_smpp = $this->faker->numberBetween(0, 2);
@@ -70,6 +76,12 @@ class RandomServerData
 
         $smpp_difference = -$smpp;
         $smpp_icon = (true) ? 'ion-md-arrow-down' : 'ion-md-arrow-up';
+
+        $international_difference = -$international;
+        $international_icon = (true) ? 'ion-md-arrow-down' : 'ion-md-arrow-up';
+
+        $local_difference = -$local;
+        $local_icon = (true) ? 'ion-md-arrow-down' : 'ion-md-arrow-up';
 
         // exec("pgrep httpd", $output, $get_httpd_rand);
         $get_httpd_rand = 0;
@@ -159,6 +171,8 @@ class RandomServerData
             'services' => $services,
             'mo' => [$smsmo, $mo_difference, $mo_icon],
             'mt' => [$smsmt, $mt_difference, $mt_icon],
+            'international' => [$international, $international_difference, $international_icon],
+            'domestic' => [$local, $local_difference, $local_icon],
             'smpp' => [$smpp, $smpp_difference, $smpp_icon],
         ];
 
