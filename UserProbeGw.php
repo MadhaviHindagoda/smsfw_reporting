@@ -54,11 +54,37 @@ function generateAndGetRandomXmlData(): SimpleXMLElement
 }
 
 
-header('Content-Type: application/xml');
-$xmlCode = generateAndGetRandomXmlData();
+try {
+    if (!isset($_POST['method'])) {
+        header('Content-Type: application/json');
+        $jsonResponse = json_encode("invalid request");
+        echo $jsonResponse;
+        exit;
+    }
 
-// Output the XML
-echo $xmlCode->asXML();
+    $method = $_POST['method'];
+    switch ($method) {
+        case 'ss7':
+            header('Content-Type: application/xml');
+            $xmlCode = generateAndGetRandomXmlData();
+
+            // Output the XML
+            echo $xmlCode->asXML();
+            break;
+        default:
+            header('Content-Type: application/json');
+            $jsonResponse = json_encode("invalid request");
+            echo $jsonResponse;
+            break;
+    }
+
+    exit;
+} catch (Exception $e) {
+    echo "operation failed!";
+    exit;
+}
+
+
 
 
 
