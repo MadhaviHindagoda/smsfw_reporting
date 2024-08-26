@@ -16,19 +16,19 @@ class Model
 {
     public $pdo;
 
-    public function __construct($dbConnection = 'report_db_connection')
+    public function __construct()
     {
-        switch ($dbConnection) {
-            case 'main_connection':
-                $connection = DbConnection::getInstance();  
-                break;
+        // switch ($dbConnection) {
+        //     case 'main_connection':
+        //         $connection = DbConnection::getInstance();  
+        //         break;
 
-            default:
-                $connection = DbConnectionReporting::getInstance();
-                break;
-        }
+        //     default:
+        //         $connection = DbConnectionReporting::getInstance();
+        //         break;
+        // }
 
-        $this->pdo = $connection->getConnection();
+        // $this->pdo = $connection->getConnection();
         
     }
 
@@ -83,15 +83,19 @@ class Model
         return $stmt->fetchColumn() > 0;
     }
 
-    // New method to get existing node IDs
-    public function getExistingNodeIds() {
-        $tableName = 'nodes';
-        $query = "SELECT id FROM {$tableName}";
-        $stmt = $this->pdo->prepare($query);
-        $stmt->execute();
-        return $stmt->fetchAll(PDO::FETCH_COLUMN, 0); // Fetch IDs as a single column array
-    }
+    // // New method to get existing node IDs
+    // public function getExistingNodeIds() {
+    //     $tableName = 'nodes';
+    //     $query = "SELECT id FROM {$tableName}";
+    //     $stmt = $this->pdo->prepare($query);
+    //     $stmt->execute();
+    //     return $stmt->fetchAll(PDO::FETCH_COLUMN, 0); // Fetch IDs as a single column array
+    // }
+
+    
+
 }
+
 
 
 
