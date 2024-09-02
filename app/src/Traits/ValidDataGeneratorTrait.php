@@ -25,7 +25,7 @@ trait ValidDataGeneratorTrait
     private $currentId = 1;
 
     // Method to generate auto-incrementing IDs
-    private function generateAutoIncrementId(): int
+    public function generateAutoIncrementId(): int
     {
         return $this->currentId++;
     }
@@ -156,15 +156,14 @@ trait ValidDataGeneratorTrait
 
         $virtualIMSI = $this->handleDuplicates($this->recentVirtualIMSIs, $virtualIMSI, $this->duplicateChance);
 
-        // Check and update the timestamp for the generated IMSI
+        // Check if this virtual IMSI has been used before
         if (!isset($this->lastUsedTimestamps[$virtualIMSI])) {
-            // If this IMSI has not been used before, record the current time
+            // If not, initialize the timestamp with the current time
             $this->lastUsedTimestamps[$virtualIMSI] = new DateTime();
         }
 
         return $virtualIMSI;
     }
-
 
     /**
      * Generates a unique reference number based on the given creation time.
@@ -173,7 +172,7 @@ trait ValidDataGeneratorTrait
      * @param mixed $createdAt The creation time as a string or DateTime object.
      * @return string The generated reference number.
      */
-    private function generateReference($createdAt): string
+    public function generateReference($createdAt): string
     {
         $timestamp = is_string($createdAt) ? strtotime($createdAt) : $createdAt->getTimestamp();
         $uniqueNumber = $this->faker->numerify('####');
@@ -190,7 +189,7 @@ trait ValidDataGeneratorTrait
      * 
      * @return array An associative array with 'start' and 'end' keys, containing the start and end timestamps.
      */
-    private function generateDateRange(string $startDate, string $endDate): array
+    public function generateDateRange(string $startDate, string $endDate): array
     {
         return [
             'start' => $startDate . ' 00:00:00',
@@ -205,7 +204,7 @@ trait ValidDataGeneratorTrait
      * @param string $trafficType The traffic type (local_onnet, local_olo, international).
      * @param resource $csvFile The open CSV file resource.
      */
-    private function generateSMSMORecords(int $numRecords, string $trafficType, string $startDate, string $endDate, $csvFile): void
+    public function generateSMSMORecords(int $numRecords, string $trafficType, string $startDate, string $endDate, $csvFile): void
     {
         for ($i = 0; $i < $numRecords; $i++) {
             $smsmoRecords = $this->generateSMSMOFields($trafficType, $startDate, $endDate);
@@ -223,28 +222,32 @@ trait ValidDataGeneratorTrait
      * @param string $trafficType The traffic type (local_olo, international).
      * @param resource $csvFile The open CSV file resource.
      */
-    public function generateSRISMSMTRecords($numRecords, $trafficType, string $startDate, string $endDate, $csvFile)
+    public function generateSRISMSMTRecords($trafficType, string $startDate, string $endDate, $numSriSmsmtPairs, $csvFile)
     {
-        for ($i = 0; $i < $numRecords; $i++) {
-            $commonValues = $this->generateCommonSMSMTValues($trafficType, $startDate, $endDate);
-            // Generate SRI record
-            $sriRecord = $this->generateSRIFields($commonValues);
+
+        // Generate common values used for both SRI and SMSMT
+        $commonValues = $this->generateCommonSMSMTValues($trafficType, $startDate, $endDate, $numSriSmsmtPairs);
+
+        foreach ($commonValues as $commonValue) {
+            // Generate and write the SRI record
+            $sriRecord = $this->generateSRIRecord($commonValue);
             fputcsv($csvFile, $sriRecord);
 
-            // Generate SMSMT records
-            $smsmtRecords = $this->generateSMSMTFields($commonValues);
+            // Generate and write the related SMSMT records
+            $smsmtRecords = $this->generateSMSMTRecords($commonValue);
             foreach ($smsmtRecords as $smsmtRecord) {
                 fputcsv($csvFile, $smsmtRecord);
             }
         }
     }
 
-    private function generateSMPPRecords(int $numRecords, string $trafficType, string $startDate, string $endDate, $csvFile): void
+
+    public function generateSMPPRecords(int $numRecords, string $trafficType, string $startDate, string $endDate, $csvFile): void
     {
         for ($i = 0; $i < $numRecords; $i++) {
-            $smsmoRecords = $this->generateSMPPFields($trafficType, $startDate, $endDate);
-            foreach ($smsmoRecords as $smsmoRecord) {
-                fputcsv($csvFile, $smsmoRecord);
+            $smppRecords = $this->generateSMPPFields($trafficType, $startDate, $endDate);
+            foreach ($smppRecords as $smppRecord) {
+                fputcsv($csvFile, $smppRecord);
             }
         }
     }
@@ -284,5 +287,154 @@ trait ValidDataGeneratorTrait
             }
             $stmt->execute();
         }
+    }
+
+    /**
+     * Generates an array of unique ports.
+     *
+     * @param int $numPorts The number of ports to generate.
+     * @return array An array of unique ports.
+     */
+    private function generatePorts(int $numPorts, int $start, int $end)
+    {
+        for ($i = 0; $i < $numPorts; $i++) {
+            // Generate a unique port within the specified range
+            $port = $this->faker->numberBetween($start, $end);
+            $ports[] = $port;
+        }
+        return $ports;
+    }
+
+    /**
+     * Generates SMS content split into multiple parts based on the number of parts and whether Unicode is used.
+     *
+     * @param int $numParts The number of parts to split the SMS content into. This determines how many separate records will be generated.
+     * @param bool $isUnicode Indicates whether the SMS content should use Unicode encoding. If true, the content length and handling will be adjusted for Unicode.
+     * 
+     * @return array An array of associative arrays, each representing a part of the SMS content. Each part includes:
+     *     - 'msg_part' (int): The part number of the message.
+     *     - 'msg_parts' (int): Total number of parts in the message.
+     *     - 'content' (string): The content of the SMS part.
+     *     - 'tpdu_length' (int): The length of the TPDU (Transport Protocol Data Unit) in characters.
+     */
+
+    private function generateSMSContent(int $numParts, bool $isUnicode): array
+    {
+        $contentParts = [];
+
+        $partLength = $isUnicode ? 67 : 153;
+
+        // Generate a long content text
+        $longConLength = $partLength * $numParts * 2;
+        $longContent = $this->faker->text($longConLength);
+
+        for ($part = 1; $part <= $numParts; $part++) {
+            if ($numParts === 1) {
+                $charLength = $isUnicode ? rand(1, 70) : rand(1, 160);
+            } elseif ($part === $numParts) {
+                $charLength = $isUnicode ? rand(1, 67) : rand(1, 153);
+            } else {
+                $charLength = $partLength;
+            }
+
+            $content = mb_substr($longContent, 0, $charLength);
+            $longContent = mb_substr($longContent, $charLength);
+
+            $tpduLength = mb_strlen($content);
+
+            $isUnicode && $content = $this->addUnicodeCharacter($content);
+
+            $contentParts[] = [
+                'msg_part' => $part,
+                'msg_parts' => $numParts,
+                'content' => $content,
+                'tpdu_length' => $tpduLength,
+            ];
+        }
+
+        return $contentParts;
+    }
+
+
+
+    /**
+     * Adds a random Unicode character to the content string, optionally removing a character first.
+     *
+     * @param string $content The original content string to which a Unicode character will be added.
+     * 
+     * @return string The content string with a random Unicode character added.
+     */
+    private function addUnicodeCharacter(string $content): string
+    {
+        $length = mb_strlen($content);
+
+        if ($length > 0) {
+            $positionToRemove = random_int(0, $length - 1);
+            $content = mb_substr($content, 0, $positionToRemove) . mb_substr($content, $positionToRemove + 1);
+        }
+
+        // Add a random Unicode character
+        $codepoint = random_int(0x0020, 0x04FF);
+        $unicodeCharacter = mb_chr($codepoint, 'UTF-8');
+
+        // Insert the Unicode character at a random position
+        $positionToInsert = random_int(0, mb_strlen($content));
+
+        return mb_substr($content, 0, $positionToInsert) . $unicodeCharacter . mb_substr($content, $positionToInsert);
+    }
+
+    /**
+     * Generates an array of sequential timestamps between the specified start and end dates.
+     *
+     * @param string $startDate The start date in 'Y-m-d H:i:s' format.
+     * @param string $endDate The end date in 'Y-m-d H:i:s' format.
+     * @param int $numSriSmsmtPairs The number of timestamp pairs (SRI and SMSMT) to generate.
+     *
+     * @return array An array of DateTime objects representing sequential timestamps.
+     */
+    private function generateSequentialTimestamps(string $startDate, string $endDate, int $numSriSmsmtPairs): array
+    {
+        $startTime = new DateTime($startDate);
+        $endTime = new DateTime($endDate);
+
+        $totalInterval = $endTime->getTimestamp() - $startTime->getTimestamp();
+
+        $intervalSeconds = intval($totalInterval / ($numSriSmsmtPairs - 1));
+
+        $timestamps = [];
+
+        for ($i = 0; $i < $numSriSmsmtPairs; $i++) {
+            $timestamps[] = clone $startTime;
+
+            $startTime->modify("+{$intervalSeconds} seconds");
+        }
+
+        return $timestamps;
+    }
+
+    /**
+     * Retrieves node IDs by populating the 'nodes' table with test data and storing the IDs.
+     * 
+     * @return void
+     * 
+     * @throws Exception If there is an error during table truncation or data insertion.
+     */
+    public function getNodeIds(): void
+    {
+        $tableName = 'nodes';
+
+        $this->truncateTable($tableName);
+
+        $data = [];
+        for ($i = 1; $i <= 3; $i++) {
+            $data[] = [
+                'id' => $i,
+                'name' => $this->faker->company
+            ];
+        }
+
+        $this->insertDataBatch($tableName, $data);
+
+        $this->nodeIds = array_column($data, 'id');
     }
 }
