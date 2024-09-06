@@ -230,11 +230,11 @@ trait ValidDataGeneratorTrait
 
         foreach ($commonValues as $commonValue) {
             // Generate and write the SRI record
-            $sriRecord = $this->generateSRIRecord($commonValue);
+            $sriRecord = $this->generateSRIFields($commonValue);
             fputcsv($csvFile, $sriRecord);
 
             // Generate and write the related SMSMT records
-            $smsmtRecords = $this->generateSMSMTRecords($commonValue);
+            $smsmtRecords = $this->generateSMSMTFields($commonValue);
             foreach ($smsmtRecords as $smsmtRecord) {
                 fputcsv($csvFile, $smsmtRecord);
             }
@@ -411,6 +411,29 @@ trait ValidDataGeneratorTrait
 
         return $timestamps;
     }
+
+    private function generateIPs(string $startIp, string $endIp): array
+    {
+        $startLong = ip2long($startIp);
+        $endLong = ip2long($endIp);
+
+        if ($startLong === false || $endLong === false) {
+            throw new Exception("Invalid IP address format: startIp = $startIp, endIp = $endIp");
+        }
+
+        if ($startLong > $endLong) {
+            throw new Exception("Start IP ($startIp) is greater than end IP ($endIp)");
+        }
+
+        $ips = [];
+        while ($startLong <= $endLong) {
+            $ips[] = long2ip($startLong);
+            $startLong++;
+        }
+
+        return $ips;
+    }
+
 
     /**
      * Retrieves node IDs by populating the 'nodes' table with test data and storing the IDs.
