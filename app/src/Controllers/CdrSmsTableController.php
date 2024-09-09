@@ -21,10 +21,6 @@ class CdrSmsTableController
     public $nodeIds = [];
     private $pdo;
     private $smppMapping = [];
-    private $systemIdPool = [];
-    private $oaToSystemIdMap = [];
-    private $systemIdFormat = '[A-Za-z0-9]{8}';
-    private $numIds;
 
     use ValidDataGeneratorTrait;
 
