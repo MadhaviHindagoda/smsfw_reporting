@@ -165,6 +165,7 @@ trait ValidDataGeneratorTrait
         return $virtualIMSI;
     }
 
+
     /**
      * Generates a unique reference number based on the given creation time.
      * It combines a timestamp with a unique number to form the reference.
@@ -197,60 +198,6 @@ trait ValidDataGeneratorTrait
         ];
     }
 
-    /**
-     * Generates a specified number of SMSMO records and writes them to the CSV file.
-     *
-     * @param int $numRecords The number of SMSMO records to generate.
-     * @param string $trafficType The traffic type (local_onnet, local_olo, international).
-     * @param resource $csvFile The open CSV file resource.
-     */
-    public function generateSMSMORecords(int $numRecords, string $trafficType, string $startDate, string $endDate, $csvFile): void
-    {
-        for ($i = 0; $i < $numRecords; $i++) {
-            $smsmoRecords = $this->generateSMSMOFields($trafficType, $startDate, $endDate);
-            foreach ($smsmoRecords as $smsmoRecord) {
-                fputcsv($csvFile, $smsmoRecord);
-            }
-        }
-    }
-
-    /**
-     * Generates a specified number of SRI-SMSMT record pairs and writes them to the CSV file.
-     *
-     * @param int $index 
-     * @param int $numRecords The number of SRI-SMSMT record pairs to generate.
-     * @param string $trafficType The traffic type (local_olo, international).
-     * @param resource $csvFile The open CSV file resource.
-     */
-    public function generateSRISMSMTRecords($trafficType, string $startDate, string $endDate, $numSriSmsmtPairs, $csvFile)
-    {
-
-        // Generate common values used for both SRI and SMSMT
-        $commonValues = $this->generateCommonSMSMTValues($trafficType, $startDate, $endDate, $numSriSmsmtPairs);
-
-        foreach ($commonValues as $commonValue) {
-            // Generate and write the SRI record
-            $sriRecord = $this->generateSRIFields($commonValue);
-            fputcsv($csvFile, $sriRecord);
-
-            // Generate and write the related SMSMT records
-            $smsmtRecords = $this->generateSMSMTFields($commonValue);
-            foreach ($smsmtRecords as $smsmtRecord) {
-                fputcsv($csvFile, $smsmtRecord);
-            }
-        }
-    }
-
-
-    public function generateSMPPRecords(int $numRecords, string $trafficType, string $startDate, string $endDate, $csvFile): void
-    {
-        for ($i = 0; $i < $numRecords; $i++) {
-            $smppRecords = $this->generateSMPPFields($trafficType, $startDate, $endDate);
-            foreach ($smppRecords as $smppRecord) {
-                fputcsv($csvFile, $smppRecord);
-            }
-        }
-    }
 
 
     /**
@@ -399,18 +346,36 @@ trait ValidDataGeneratorTrait
 
         $totalInterval = $endTime->getTimestamp() - $startTime->getTimestamp();
 
+        // Base interval between each pair
         $intervalSeconds = intval($totalInterval / ($numSriSmsmtPairs - 1));
 
         $timestamps = [];
 
         for ($i = 0; $i < $numSriSmsmtPairs; $i++) {
+            // Add the timestamp to the array
             $timestamps[] = clone $startTime;
 
-            $startTime->modify("+{$intervalSeconds} seconds");
+            if ($i < $numSriSmsmtPairs - 1) {
+                $randomSeconds = rand(-$intervalSeconds, $intervalSeconds);
+                $adjustedInterval = $intervalSeconds + $randomSeconds;
+
+                // Calculate the potential next time
+                $nextTime = (clone $startTime)->modify("+{$adjustedInterval} seconds");
+
+                // Check if the next time exceeds the end time
+                if ($nextTime > $endTime) {
+                    // If it exceeds, set the next time to be exactly the end time
+                    $startTime = clone $endTime;
+                } else {
+                    // Otherwise, use the adjusted interval
+                    $startTime->modify("+{$adjustedInterval} seconds");
+                }
+            }
         }
 
         return $timestamps;
     }
+
 
     private function generateIPs(string $startIp, string $endIp): array
     {
