@@ -273,72 +273,72 @@ class CdrSmsTableController
      * @return array An associative array containing common values for SMSMT records. 
      */
     public function generateCommonSMSMTValues(string $trafficType, string $startDate, string $endDate, int $numSriSmsmtPairs): array
-{
-    try {
-        $commonSMSMTValues = []; // Initialize array to store the values
-        $lastUsedTimestamps = []; // To track timestamps for each virtual IMSI
+    {
+        try {
+            $commonSMSMTValues = []; // Initialize array to store the values
+            $lastUsedTimestamps = []; // To track timestamps for each virtual IMSI
 
-        // Generate an array of sequential timestamps
-        $timestamps = $this->generateSequentialTimestamps($startDate, $endDate, $numSriSmsmtPairs);
+            // Generate an array of sequential timestamps
+            $timestamps = $this->generateSequentialTimestamps($startDate, $endDate, $numSriSmsmtPairs);
 
-        foreach ($timestamps as $sriCreatedAt) {
-            // Generate a new OA (originating address) for each pair
-            $useName = $this->faker->boolean($_ENV['OA_NAMES_PERCENTAGE']);
+            foreach ($timestamps as $sriCreatedAt) {
+                // Generate a new OA (originating address) for each pair
+                $useName = $this->faker->boolean($_ENV['OA_NAMES_PERCENTAGE']);
 
-            if ($useName) {
-                $oaName = $this->faker->randomElement(explode(',', $_ENV['OA_NAMES']));
-                $oa = $oaName;
-            } else {
-                $oaMSISDN = $this->generateMSISDN($trafficType);
-                $oa = $oaMSISDN;
-            }
-
-            $oaNames = explode(',', $_ENV['OA_NAMES']);
-            $oaType = (substr($oa, 0, 2) === '94' || in_array($oa, $oaNames)) ? 'local' : 'international';
-
-            // Generate a new DA (destination address) for each pair
-            $da = $this->generateMSISDN('local_onnet');
-
-            $localSmscGtArray = explode(',', $_ENV['OLO_SMSC_GT']);
-            $intlSmscGtArray = explode(',', $_ENV['INTL_SMSC_GT']);
-            $localSmscGt = $this->faker->randomElement($localSmscGtArray);
-            $intlSmscGt = $this->faker->randomElement($intlSmscGtArray);
-            $smscGt = ($oaType === 'local') ? $localSmscGt : $intlSmscGt;
-
-            // Generate the virtual IMSI
-            $virtualImsi = $this->generateVirtualIMSI();
-
-            // Ensure the timestamp has a minimum 30-minute gap if needed
-            if (isset($lastUsedTimestamps[$virtualImsi])) {
-                $lastUsedTimestamp = $lastUsedTimestamps[$virtualImsi];
-                $updatedTimestamp = (clone $lastUsedTimestamp)->modify('+30 minutes');
-
-                if ($sriCreatedAt < $updatedTimestamp) {
-                    $sriCreatedAt = $updatedTimestamp;
+                if ($useName) {
+                    $oaName = $this->faker->randomElement(explode(',', $_ENV['OA_NAMES']));
+                    $oa = $oaName;
+                } else {
+                    $oaMSISDN = $this->generateMSISDN($trafficType);
+                    $oa = $oaMSISDN;
                 }
+
+                $oaNames = explode(',', $_ENV['OA_NAMES']);
+                $oaType = (substr($oa, 0, 2) === '94' || in_array($oa, $oaNames)) ? 'local' : 'international';
+
+                // Generate a new DA (destination address) for each pair
+                $da = $this->generateMSISDN('local_onnet');
+
+                $localSmscGtArray = explode(',', $_ENV['OLO_SMSC_GT']);
+                $intlSmscGtArray = explode(',', $_ENV['INTL_SMSC_GT']);
+                $localSmscGt = $this->faker->randomElement($localSmscGtArray);
+                $intlSmscGt = $this->faker->randomElement($intlSmscGtArray);
+                $smscGt = ($oaType === 'local') ? $localSmscGt : $intlSmscGt;
+
+                // Generate the virtual IMSI
+                $virtualImsi = $this->generateVirtualIMSI();
+
+                // Ensure the timestamp has a minimum 30-minute gap if needed
+                if (isset($lastUsedTimestamps[$virtualImsi])) {
+                    $lastUsedTimestamp = $lastUsedTimestamps[$virtualImsi];
+                    $updatedTimestamp = (clone $lastUsedTimestamp)->modify('+30 minutes');
+
+                    if ($sriCreatedAt < $updatedTimestamp) {
+                        $sriCreatedAt = $updatedTimestamp;
+                    }
+                }
+
+                // Update the last used timestamp for this virtual IMSI
+                $lastUsedTimestamps[$virtualImsi] = $sriCreatedAt;
+
+                // Build the common SMS-MT value set
+                $commonSMSMTValues[] = [
+                    'reference' => $this->generateReference($sriCreatedAt),
+                    'imsi' => $this->generateIMSI($da),
+                    'virtual_imsi' => $virtualImsi,
+                    'da' => $da,
+                    'oa' => $oa,
+                    'smscGt' => $smscGt,
+                    'sri_created_at' => $sriCreatedAt,
+                ];
             }
 
-            // Update the last used timestamp for this virtual IMSI
-            $lastUsedTimestamps[$virtualImsi] = $sriCreatedAt;
-
-            // Build the common SMS-MT value set
-            $commonSMSMTValues[] = [
-                'reference' => $this->generateReference($sriCreatedAt),
-                'imsi' => $this->generateIMSI($da),
-                'virtual_imsi' => $virtualImsi,
-                'da' => $da,
-                'oa' => $oa,
-                'smscGt' => $smscGt,
-                'sri_created_at' => $sriCreatedAt,
-            ];
+            return $commonSMSMTValues;
+        } catch (Exception $e) {
+            Logging::logError('Error generating common SMS MT values: ' . $e->getMessage());
+            throw new Exception('Error generating common SMS MT values: ' . $e->getMessage());
         }
-
-        return $commonSMSMTValues;
-    } catch (Exception $e) {
-        Logging::logError('Error generating common SMS MT values: ' . $e->getMessage());
-        throw new Exception('Error generating common SMS MT values: ' . $e->getMessage());
     }
-}
 
     /**
      * Generate SMPP fields for SMS records within a specified date range.
@@ -352,78 +352,37 @@ class CdrSmsTableController
     {
         try {
             $isLocal = $smpptrafficType === 'local';
-
-            // Define OA and System IDs mapping for Local & international traffic
-            $oaPool = $isLocal ? explode(',', $_ENV['SMPP_OA_LOCAL']) : explode(',', $_ENV['SMPP_OA_INTL']);
-            $oaSystemIdPool = $isLocal ? explode(',', $_ENV['SMPP_OA_LOCAL_SYSTEM_IDS']) : explode(',', $_ENV['SMPP_OA_INTL_SYSTEM_IDS']);
-            $oaVirtualVlrGts = $isLocal ? explode(',', $_ENV['SMPP_OA_LOCAL_VIRTUAL_VLR_GT']) : explode(',', $_ENV['SMPP_OA_INTL_VIRTUAL_VLR_GT']);
-            $oaEsmeIps = $isLocal ? explode(',', $_ENV['ESME_IP_OA_LOCAL']) : explode(',', $_ENV['ESME_IP_OA_INTL']);
-            $oaSMSCIPs = $isLocal ? explode(',', $_ENV['SMSC_IP_OA_LOCAL']) : explode(',', $_ENV['SMSC_IP_OA_INTL']);
-            $oaSMSCPorts = $isLocal ? explode(',', $_ENV['SMSC_PORT_OA_LOCAL']) : explode(',', $_ENV['SMSC_PORT_OA_INTL']);
-
-            // Define Short Codes OA and System IDs mapping for Local traffic
-            $shortCodePool = explode(',', $_ENV['SMPP_SHORT_CODES_OA_LOCAL']);
-            $shortCodeSystemIdPool = explode(',', $_ENV['SMPP_SHORT_CODES_OA_LOCAL_SYSTEM_IDS']);
-            $shortCodeVirtualVlrGts = explode(',', $_ENV['SMPP_SHORT_CODES_VIRTUAL_VLR_GT']);
-            $shortCodeEsmeIps = explode(',', $_ENV['ESME_IP_SHORT_CODES']);
-            $shortCodeSMSCIPs = explode(',', $_ENV['SMSC_IP_SHORT_CODES']);
-            $shortCodeSMSCPorts = explode(',', $_ENV['SMSC_PORT_SHORT_CODES']);
-
-            // Define MSISDN OA and System IDs mapping for Local traffic
-            $msisdnPool = explode(',', $_ENV['SMPP_MSISDN_OA_LOCAL']);
-            $msisdnSystemIdPool = explode(',', $_ENV['SMPP_MSISDN_OA_LOCAL_SYSTEM_IDS']);
-            $msisdnVirtualVlrGts = explode(',', $_ENV['SMPP_MSISDN_OA_LOCAL_VIRTUAL_VLR_GT']);
-            $msisdnEsmeIps = explode(',', $_ENV['ESME_IP_MSISDN_OA_LOCAL']);
-            $msisdnSMSCIPs = explode(',', $_ENV['SMSC_IP_MSISDN_OA_LOCAL']);
-            $msisdnSMSCPorts = explode(',', $_ENV['SMSC_PORT_MSISDN_OA_LOCAL']);
-
             $oaType = $isLocal ? $this->faker->randomElement(['oa', 'short_code', 'msisdn']) : 'oa';
 
+            // Decode JSON data
+            $localTrafficData = json_decode($_ENV['SMPP_OA_LOCAL_JSON'], true);
+            $intlTrafficData = json_decode($_ENV['SMPP_OA_INTL_JSON'], true);
+            $shortCodeData = json_decode($_ENV['SMPP_SHORT_CODES_JSON'], true);
+            $msisdnData = json_decode($_ENV['SMPP_MSISDN_OA_LOCAL_JSON'], true);           
+
+            // Select the appropriate traffic data
             switch ($oaType) {
                 case 'oa':
-                    // Get index based on OA pool
-                    $oaIndex = array_rand($oaPool);
-                    $oa = $oaPool[$oaIndex];
-                    $systemId = $oaSystemIdPool[$oaIndex];
-                    $virtualVlrGt = $oaVirtualVlrGts[$oaIndex];
-                    $esmeIp = $oaEsmeIps[$oaIndex];
-                    $smscIp = $oaSMSCIPs[$oaIndex];
-                    $smscPort = $oaSMSCPorts[$oaIndex];
+                    $trafficData = $isLocal ? $localTrafficData : $intlTrafficData;
                     break;
-
                 case 'short_code':
-                    if (!empty($shortCodeSystemIdPool)) {
-                        $shortCodeIndex = array_rand($shortCodePool);
-                        $oa = $shortCodePool[$shortCodeIndex];
-                        $systemId = $shortCodeSystemIdPool[$shortCodeIndex];
-                        $virtualVlrGt = $shortCodeVirtualVlrGts[$shortCodeIndex];
-                        $esmeIp = $shortCodeEsmeIps[$shortCodeIndex];
-                        $smscIp = $shortCodeSMSCIPs[$shortCodeIndex];
-                        $smscPort = $shortCodeSMSCPorts[$shortCodeIndex];
-                    }
+                    $trafficData = $shortCodeData;
                     break;
-
                 case 'msisdn':
-                    if (!empty($msisdnSystemIdPool)) {
-                        $msisdnIndex = array_rand($msisdnPool);
-                        $oa = $msisdnPool[$msisdnIndex];
-                        $systemId = $msisdnSystemIdPool[$msisdnIndex];
-                        $virtualVlrGt = $msisdnVirtualVlrGts[$msisdnIndex];
-                        $esmeIp = $msisdnEsmeIps[$msisdnIndex];
-                        $smscIp = $msisdnSMSCIPs[$msisdnIndex];
-                        $smscPort = $msisdnSMSCPorts[$msisdnIndex];
-                    }
+                    $trafficData = $msisdnData;
                     break;
-
                 default:
-                    $oaIndex = array_rand($oaPool);
-                    $oa = $oaPool[$oaIndex];
-                    $systemId = $oaSystemIdPool[$oaIndex];
-                    $virtualVlrGt = $oaVirtualVlrGts[$oaIndex];
-                    $esmeIp = $oaEsmeIps[$oaIndex];
-                    $smscIp = $oaSMSCIPs[$oaIndex];
-                    $smscPort = $oaSMSCPorts[$oaIndex];
+                    $trafficData = $isLocal ? $localTrafficData : $intlTrafficData;
             }
+
+            // Randomly select index from the selected traffic data
+            $oaIndex = array_rand($trafficData['oa']);
+            $oa = $trafficData['oa'][$oaIndex];
+            $systemId = $trafficData['system_ids'][$oaIndex];
+            $virtualVlrGt = $trafficData['vlr_gts'][$oaIndex];
+            $esmeIp = $trafficData['esme_ips'][$oaIndex];
+            $smscIp = $trafficData['smsc_ips'][$oaIndex];
+            $smscPort = $trafficData['smsc_ports'][$oaIndex];
 
             $esmePorts = $this->generatePorts(5, $_ENV['ESME_PORT_START'], $_ENV['ESME_PORT_END']);
 
