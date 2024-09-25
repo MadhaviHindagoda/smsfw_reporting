@@ -384,7 +384,7 @@ class CdrSmsTableController
             $smscIp = $trafficData['smsc_ips'][$oaIndex];
             $smscPort = $trafficData['smsc_ports'][$oaIndex];
 
-            $esmePorts = $this->generatePorts(5, $_ENV['ESME_PORT_START'], $_ENV['ESME_PORT_END']);
+            $esmePorts = $this->generatePorts($_ENV['NUM_ESME_PORTS'], $_ENV['ESME_PORT_START'], $_ENV['ESME_PORT_END']);
 
             if (!isset($this->smppMapping[$systemId])) {
 
