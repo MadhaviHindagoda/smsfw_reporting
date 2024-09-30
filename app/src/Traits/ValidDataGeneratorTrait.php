@@ -425,4 +425,30 @@ trait ValidDataGeneratorTrait
 
         $this->nodeIds = array_column($data, 'id');
     }
+
+    private function fetchOATrafficData(string $type): array
+    {
+        $table = $type === 'local' ? 'smpp_oa_local' : 'smpp_oa_intl';
+        $query = "SELECT * FROM $table";
+        return $this->executeQuery($query);
+    }
+
+    private function fetchShortCodeData(): array
+    {
+        $query = "SELECT * FROM smpp_short_codes";
+        return $this->executeQuery($query);
+    }
+
+    private function fetchMSISDNData(): array
+    {
+        $query = "SELECT * FROM smpp_msisdn_oa_local";
+        return $this->executeQuery($query);
+    }
+
+    private function executeQuery(string $query): array
+    {
+        // Replace with your database connection logic
+        $result = $this->dbConnection->query($query);
+        return $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
+    }
 }

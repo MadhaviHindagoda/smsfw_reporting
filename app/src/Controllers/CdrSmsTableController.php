@@ -3,9 +3,11 @@
 namespace app\src\Controllers;
 
 require_once __DIR__ . '/../../../vendor/autoload.php';
+require_once __DIR__ . '/../../../config/SmppMappingArrays.php';
 
 use app\src\Models\DbConnectionReporting;
 use Faker\Factory as Faker;
+use config\SmppMappingArrays;
 use app\src\Traits\ValidDataGeneratorTrait;
 use PDOException;
 use Exception;
@@ -30,9 +32,11 @@ class CdrSmsTableController
     {
         $dbConnection = DbConnectionReporting::getInstance();
         $this->pdo = $dbConnection->getConnection();
-        $this->faker = Faker::create();
-        // $this->duplicateChance = 0.5;
 
+        // $dbConnectionSMPP = DbConnectionSMPP::getInstance();
+        // $this->pdo = $dbConnectionSMPP->getConnection();
+
+        $this->faker = Faker::create();
     }
 
     /**
@@ -348,46 +352,82 @@ class CdrSmsTableController
      * @param string $endDate The end date for the record generation.
      * @return array The generated records for SMPP fields.
      */
-    public function generateSMPPFields(string $smpptrafficType, string $startDate, string $endDate): array
+    public function generateSMPPFields(string $smppTrafficType, string $startDate, string $endDate): array
     {
         try {
-            $isLocal = $smpptrafficType === 'local';
-            $oaType = $isLocal ? $this->faker->randomElement(['oa', 'short_code', 'msisdn']) : 'oa';
-
-            // Decode JSON data
-            $localTrafficData = json_decode($_ENV['SMPP_OA_LOCAL_JSON'], true);
-            $intlTrafficData = json_decode($_ENV['SMPP_OA_INTL_JSON'], true);
-            $shortCodeData = json_decode($_ENV['SMPP_SHORT_CODES_JSON'], true);
-            $msisdnData = json_decode($_ENV['SMPP_MSISDN_OA_LOCAL_JSON'], true);           
-
-            // Select the appropriate traffic data
-            switch ($oaType) {
-                case 'oa':
-                    $trafficData = $isLocal ? $localTrafficData : $intlTrafficData;
-                    break;
-                case 'short_code':
-                    $trafficData = $shortCodeData;
-                    break;
-                case 'msisdn':
-                    $trafficData = $msisdnData;
-                    break;
-                default:
-                    $trafficData = $isLocal ? $localTrafficData : $intlTrafficData;
+            $mappings = SmppMappingArrays::getSmppMapping();
+    
+            $localSmppMapping = $mappings['localSmppMapping'];
+            $intlSmppMapping = $mappings['intlSmppMapping'];
+            $esmeToSmsfw = $mappings['esmeToSmsfw'];
+            $smsfwToSmsc = $mappings['smsfwToSmsc'];
+    
+            $groupedEsmeToSmsfw = [];
+            foreach ($esmeToSmsfw as $mapping) {
+                $smsfwIpandPort = $mapping['smsfwIpandPort'];
+                $esmeIp = $mapping['esmeIp'];
+    
+                // Group ESME IPs by smsfwIpandPort
+                if (!isset($groupedEsmeToSmsfw[$smsfwIpandPort])) {
+                    $groupedEsmeToSmsfw[$smsfwIpandPort] = [];
+                }
+                $groupedEsmeToSmsfw[$smsfwIpandPort][] = $esmeIp;
             }
-
-            // Randomly select index from the selected traffic data
-            $oaIndex = array_rand($trafficData['oa']);
-            $oa = $trafficData['oa'][$oaIndex];
-            $systemId = $trafficData['system_ids'][$oaIndex];
-            $virtualVlrGt = $trafficData['vlr_gts'][$oaIndex];
-            $esmeIp = $trafficData['esme_ips'][$oaIndex];
-            $smscIp = $trafficData['smsc_ips'][$oaIndex];
-            $smscPort = $trafficData['smsc_ports'][$oaIndex];
-
+    
+            // Convert grouped ESME IPs into comma-separated strings
+            $finalEsmeToSmsfw = [];
+            foreach ($groupedEsmeToSmsfw as $smsfwIpandPort => $esmeIps) {
+                $finalEsmeToSmsfw[] = [
+                    'esmeIp' => implode(',', $esmeIps),
+                    'smsfwIpandPort' => $smsfwIpandPort
+                ];
+            }
+    
+            $smppMapping = $smppTrafficType === 'international' ? $intlSmppMapping : $localSmppMapping;
+    
+            foreach ($smppMapping as &$entry) {
+                $esmeIp = $entry['esme_ip'];
+                $smsfwData = array_filter($finalEsmeToSmsfw, function ($mapping) use ($esmeIp) {
+                    // Check if any ESME IP in the grouped string matches the current ESME IP
+                    return in_array($esmeIp, explode(',', $mapping['esmeIp']));
+                });
+    
+                $smsfwData = reset($smsfwData);
+    
+                if ($smsfwData) {
+                    $smsfwIpandPort = $smsfwData['smsfwIpandPort'];
+                    $entry['smsfw_ip_and_port'] = $smsfwIpandPort;
+    
+                    // Map SMSFW to SMSC directly using smsfwIpandPort
+                    $smscData = array_filter($smsfwToSmsc, function ($mapping) use ($smsfwIpandPort) {
+                        return $mapping['smsfwIpandPort'] === $smsfwIpandPort;
+                    });
+    
+                    $smscData = reset($smscData);
+    
+                    if ($smscData) {
+                        $entry['smsc_mapping'] = [
+                            'smsc_ip' => $smscData['smscIp'],
+                            'smsc_port' => $smscData['smscPort'],
+                        ];
+                    }
+                }
+            }
+    
+            $isLocal = $smppTrafficType === 'local';
+            $entryIndex = array_rand($smppMapping);
+            $trafficEntry = $smppMapping[$entryIndex];
+    
+            $oa = $trafficEntry['oa'];
+            $systemId = $trafficEntry['system_id'];
+            $virtualVlrGt = $trafficEntry['vlr_gt'];
+            $esmeIp = $trafficEntry['esme_ip'];
+            $smscIp = $trafficEntry['smsc_mapping']['smsc_ip'] ?? '';
+            $smscPort = $trafficEntry['smsc_mapping']['smsc_port'] ?? '';
+    
             $esmePorts = $this->generatePorts($_ENV['NUM_ESME_PORTS'], $_ENV['ESME_PORT_START'], $_ENV['ESME_PORT_END']);
-
+    
             if (!isset($this->smppMapping[$systemId])) {
-
                 $this->smppMapping[$systemId] = [
                     'esme_ip' => $esmeIp,
                     'virtual_vlr_gt' => $virtualVlrGt,
@@ -397,34 +437,33 @@ class CdrSmsTableController
                     'smsc_port' => $smscPort,
                 ];
             }
-
+    
             $dateRange = $this->generateDateRange($startDate, $endDate);
             $createdAt = $this->faker->dateTimeBetween($dateRange['start'], $dateRange['end']);
             $dlrTime = (clone $createdAt)->modify('+1 second');
-
+    
             $sarRef = $this->faker->numberBetween(1, 128);
             $messageId = $this->generateReference($createdAt);
-
+    
             $numParts = rand(1, 4);
             $isUnicode = (bool)rand(0, 1);
             $messageContents = $this->generateSMSContent($numParts, $isUnicode);
-
+    
             $da = $this->generateMSISDN('local_onnet');
-
+    
             $esmeIp = $this->smppMapping[$systemId]['esme_ip'];
             $esmePort = $this->faker->randomElement($this->smppMapping[$systemId]['esme_ports']);
-
+    
             $virtualVlrGt = $this->smppMapping[$systemId]['virtual_vlr_gt'];
             $oa = $this->smppMapping[$systemId]['oa'];
-
+    
             $smscIp = $this->smppMapping[$systemId]['smsc_ip'];
             $smscPort = $this->smppMapping[$systemId]['smsc_port'];
-
+    
             $records = [];
             foreach ($messageContents as $contentData) {
-
                 $trafficType = $isLocal ? 'local' : 'international';
-
+    
                 $id = $this->generateAutoIncrementId();
                 $records[] = [
                     'id' => $id,
@@ -465,17 +504,17 @@ class CdrSmsTableController
                     'rule_id' => "\N",
                     'action_id' => 0,
                     'node_id' => $this->faker->randomElement($this->nodeIds),
-                    'traffic_type' => $trafficType
+                    'traffic_type' => $trafficType,
                 ];
             }
-
+    
             return $records;
         } catch (Exception $e) {
             Logging::logError('Failed to generate SMPP fields: ' . $e->getMessage());
             throw new Exception('Failed to generate SMPP fields: ' . $e->getMessage());
         }
     }
-
+    
     /**
      * Generates a CSV file with the specified number of cdr_sms records.
      * It creates records based on percentages defined in the environment variables.
