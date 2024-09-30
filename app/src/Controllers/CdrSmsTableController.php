@@ -355,66 +355,47 @@ class CdrSmsTableController
     public function generateSMPPFields(string $smppTrafficType, string $startDate, string $endDate): array
     {
         try {
-            $mappings = SmppMappingArrays::getSmppMapping();
-    
-            $localSmppMapping = $mappings['localSmppMapping'];
-            $intlSmppMapping = $mappings['intlSmppMapping'];
-            $esmeToSmsfw = $mappings['esmeToSmsfw'];
-            $smsfwToSmsc = $mappings['smsfwToSmsc'];
-    
-            $groupedEsmeToSmsfw = [];
-            foreach ($esmeToSmsfw as $mapping) {
-                $smsfwIpandPort = $mapping['smsfwIpandPort'];
-                $esmeIp = $mapping['esmeIp'];
-    
-                // Group ESME IPs by smsfwIpandPort
-                if (!isset($groupedEsmeToSmsfw[$smsfwIpandPort])) {
-                    $groupedEsmeToSmsfw[$smsfwIpandPort] = [];
-                }
-                $groupedEsmeToSmsfw[$smsfwIpandPort][] = $esmeIp;
-            }
-    
-            // Convert grouped ESME IPs into comma-separated strings
-            $finalEsmeToSmsfw = [];
-            foreach ($groupedEsmeToSmsfw as $smsfwIpandPort => $esmeIps) {
-                $finalEsmeToSmsfw[] = [
-                    'esmeIp' => implode(',', $esmeIps),
-                    'smsfwIpandPort' => $smsfwIpandPort
-                ];
-            }
-    
-            $smppMapping = $smppTrafficType === 'international' ? $intlSmppMapping : $localSmppMapping;
+
+            $localSmppMapping = SmppMappingArrays::$local_smpp_mapping;
+            $intlSmppMapping = SmppMappingArrays::$intl_smpp_mapping;
+            $esmeToSmsfw = SmppMappingArrays::$esme_to_smsfw;
+            $smsfwToSmsc = SmppMappingArrays::$smsfw_to_smsc;
+
+            $isLocal = $smppTrafficType === 'local';
+
+            $smppMapping = $isLocal? $localSmppMapping : $intlSmppMapping ;
     
             foreach ($smppMapping as &$entry) {
                 $esmeIp = $entry['esme_ip'];
-                $smsfwData = array_filter($finalEsmeToSmsfw, function ($mapping) use ($esmeIp) {
-                    // Check if any ESME IP in the grouped string matches the current ESME IP
-                    return in_array($esmeIp, explode(',', $mapping['esmeIp']));
+    
+                // Match the ESME IP directly against the comma-separated esme_ip strings
+                $smsfwData = array_filter($esmeToSmsfw, function ($mapping) use ($esmeIp) {
+                    // Check if the current ESME IP is present in the comma-separated string
+                    return in_array($esmeIp, explode(',', $mapping['esme_ip']));
                 });
     
-                $smsfwData = reset($smsfwData);
+                $smsfwData = reset($smsfwData); 
     
                 if ($smsfwData) {
-                    $smsfwIpandPort = $smsfwData['smsfwIpandPort'];
+                    $smsfwIpandPort = $smsfwData['smsfw_ip_and_port'];
                     $entry['smsfw_ip_and_port'] = $smsfwIpandPort;
     
                     // Map SMSFW to SMSC directly using smsfwIpandPort
                     $smscData = array_filter($smsfwToSmsc, function ($mapping) use ($smsfwIpandPort) {
-                        return $mapping['smsfwIpandPort'] === $smsfwIpandPort;
+                        return $mapping['smsfw_ip_and_port'] === $smsfwIpandPort;
                     });
     
                     $smscData = reset($smscData);
     
                     if ($smscData) {
                         $entry['smsc_mapping'] = [
-                            'smsc_ip' => $smscData['smscIp'],
-                            'smsc_port' => $smscData['smscPort'],
+                            'smsc_ip' => $smscData['smsc_ip'],
+                            'smsc_port' => $smscData['smsc_port'],
                         ];
                     }
                 }
             }
     
-            $isLocal = $smppTrafficType === 'local';
             $entryIndex = array_rand($smppMapping);
             $trafficEntry = $smppMapping[$entryIndex];
     
