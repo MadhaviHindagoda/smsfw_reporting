@@ -110,6 +110,7 @@ trait ValidDataGeneratorTrait
      * @param string $msisdn The MSISDN to generate the IMSI.
      * @return string The generated IMSI.
      */
+
     public function generateIMSI(string $msisdn): string
     {
         // Determine if the MSISDN is local or international by checking the prefix
@@ -137,6 +138,7 @@ trait ValidDataGeneratorTrait
 
         return $imsi;
     }
+
 
     /**
      * Generates a virtual IMSI with a fixed prefix and random suffix.
@@ -339,39 +341,20 @@ trait ValidDataGeneratorTrait
      *
      * @return array An array of DateTime objects representing sequential timestamps.
      */
-    private function generateSequentialTimestamps(string $startDate, string $endDate, int $numSriSmsmtPairs): array
+
+    public function generateRandomTimestamps(string $startDate, string $endDate, int $numTimestamps): array
     {
-        $startTime = new DateTime($startDate);
-        $endTime = new DateTime($endDate);
 
-        $totalInterval = $endTime->getTimestamp() - $startTime->getTimestamp();
-
-        // Base interval between each pair
-        $intervalSeconds = intval($totalInterval / ($numSriSmsmtPairs - 1));
+        $dateRange = $this->generateDateRange($startDate, $endDate);
 
         $timestamps = [];
 
-        for ($i = 0; $i < $numSriSmsmtPairs; $i++) {
-            // Add the timestamp to the array
-            $timestamps[] = clone $startTime;
-
-            if ($i < $numSriSmsmtPairs - 1) {
-                $randomSeconds = rand(-$intervalSeconds, $intervalSeconds);
-                $adjustedInterval = $intervalSeconds + $randomSeconds;
-
-                // Calculate the potential next time
-                $nextTime = (clone $startTime)->modify("+{$adjustedInterval} seconds");
-
-                // Check if the next time exceeds the end time
-                if ($nextTime > $endTime) {
-                    // If it exceeds, set the next time to be exactly the end time
-                    $startTime = clone $endTime;
-                } else {
-                    // Otherwise, use the adjusted interval
-                    $startTime->modify("+{$adjustedInterval} seconds");
-                }
-            }
+        for ($i = 0; $i < $numTimestamps; $i++) {
+            $createdAt = $this->faker->dateTimeBetween($dateRange['start'], $dateRange['end']);
+            $timestamps[] = $createdAt->format('Y-m-d H:i:s');
         }
+
+        sort($timestamps);
 
         return $timestamps;
     }

@@ -48,77 +48,79 @@ class CdrSmsTableController
      *
      * @return array An array of SMSMO records.
      */
-    public function generateSMSMOFields(string $trafficType, $startDate, $endDate): array
+    public function generateSMSMOFields(string $trafficType, $startDate, $endDate, int $numMessages): array
     {
         try {
-            $oa = $this->generateMSISDN('local_onnet');
-            $da = $this->generateMSISDN($trafficType);
-            $trafficType = (substr($da, 0, 2) === '94') ? 'local' : 'international';
-
-            $localMscGtArray = explode(',', $_ENV['LOCAL_MSC_GT']);
-            $intlMscGtArray = explode(',', $_ENV['INTL_MSC_GT']);
-            $localMscGt = $this->faker->randomElement($localMscGtArray);
-            $intlMscGt = $this->faker->randomElement($intlMscGtArray);
-            // Determine the MSC_GT values based on whether DA is local or international
-            $mscGt = ($trafficType === 'local') ? $localMscGt : $intlMscGt;
-            $trafficType = (substr($da, 0, 2) === '94') ? 'local' : 'international';
-
-            $dateRange = $this->generateDateRange($startDate, $endDate);
-            $createdAt = $this->faker->dateTimeBetween($dateRange['start'], $dateRange['end']);
-            $reference = $this->generateReference($createdAt);
-
-            $dcs = $this->faker->numberBetween(0, 241);
-            $pid = $this->faker->numberBetween(0, 64);
-            $sar_ref = $this->faker->numberBetween(1, 128);
-
-            $numParts = rand(1, 4);
-            $isUnicode = (bool)rand(0, 1);
-            $messageContents = $this->generateSMSContent($numParts, $isUnicode);
             $records = [];
 
-            foreach ($messageContents as $contentData) {
-                $id = $this->generateAutoIncrementId();
-                $records[] =  [
-                    'id' => $id,
-                    'created_at' => $createdAt->format('Y-m-d H:i:s'),
-                    'protocol' => 'ss7',
-                    'type' => 'smsmo',
-                    'reference' => $reference,
-                    'sri_time' => "\N",
-                    'sri_calling_gt' => "\N",
-                    'sri_map_gt' => "\N",
-                    'imsi' => $this->generateIMSI($oa),
-                    'virtual_imsi' => "\N",
-                    'virtual_vlr_gt' => "\N",
-                    'fwdsm_time' => $createdAt->format('Y-m-d H:i:s'),
-                    'fwdsm_calling_gt' => $mscGt,
-                    'fwdsm_map_gt' => $mscGt,
-                    'esme_ip' => "\N",
-                    'esme_port' => "\N",
-                    'smsc_ip' => "\N",
-                    'smsc_port' => "\N",
-                    'system_id' => "\N",
-                    'message_id' => "\N",
-                    'dlr_time' => "\N",
-                    'dlr_status' => "\N",
-                    'oa' => $oa,
-                    'da' => $da,
-                    'dcs' => $dcs,
-                    'pid' => $pid,
-                    'tpdu_length' => $contentData['tpdu_length'],
-                    'sar_ref' => $sar_ref,
-                    'msg_part' => $contentData['msg_part'],
-                    'msg_parts' => $contentData['msg_parts'],
-                    'status' =>  'success',
-                    'error_major' => "\N",
-                    'error_minor' => "\N",
-                    'error_description' => "\N",
-                    'content' => $contentData['content'],
-                    'rule_id' => "\N",
-                    'action_id' => 0,
-                    'node_id' => $this->faker->randomElement($this->nodeIds),
-                    'traffic_type' => $trafficType
-                ];
+            $timestamps = $this->generateRandomTimestamps($startDate, $endDate, $numMessages);
+
+            foreach ($timestamps as $createdAt) {
+                $oa = $this->generateMSISDN('local_onnet');
+                $da = $this->generateMSISDN($trafficType);
+
+                $traffictype = (substr($da, 0, 2) === '94') ? 'local' : 'international';
+
+                $localMscGtArray = explode(',', $_ENV['LOCAL_MSC_GT']);
+                $intlMscGtArray = explode(',', $_ENV['INTL_MSC_GT']);
+                $localMscGt = $this->faker->randomElement($localMscGtArray);
+                $intlMscGt = $this->faker->randomElement($intlMscGtArray);
+                $mscGt = ($trafficType === 'local') ? $localMscGt : $intlMscGt;
+
+                $reference = $this->generateReference(new \DateTime($createdAt));
+                $numParts = rand(1, 4);
+                $isUnicode = (bool)rand(0, 1);
+                $messageContents = $this->generateSMSContent($numParts, $isUnicode);
+                $sar_ref = $this->faker->numberBetween(1, 128);
+                $dcs = $this->faker->numberBetween(0, 241);
+                $pid = $this->faker->numberBetween(0, 64);
+
+
+                foreach ($messageContents as $contentData) {
+                    $id = $this->generateAutoIncrementId();
+
+                    $records[] =  [
+                        'id' => $id,
+                        'created_at' => $createdAt,
+                        'protocol' => 'ss7',
+                        'type' => 'smsmo',
+                        'reference' => $reference,
+                        'sri_time' => "\N",
+                        'sri_calling_gt' => "\N",
+                        'sri_map_gt' => "\N",
+                        'imsi' => $this->generateIMSI($oa),
+                        'virtual_imsi' => "\N",
+                        'virtual_vlr_gt' => "\N",
+                        'fwdsm_time' => $createdAt,
+                        'fwdsm_calling_gt' => $mscGt,
+                        'fwdsm_map_gt' => $mscGt,
+                        'esme_ip' => "\N",
+                        'esme_port' => "\N",
+                        'smsc_ip' => "\N",
+                        'smsc_port' => "\N",
+                        'system_id' => "\N",
+                        'message_id' => "\N",
+                        'dlr_time' => "\N",
+                        'dlr_status' => "\N",
+                        'oa' => $oa,
+                        'da' => $da,
+                        'dcs' => $dcs,
+                        'pid' => $pid,
+                        'tpdu_length' => $contentData['tpdu_length'],
+                        'sar_ref' => $sar_ref,
+                        'msg_part' => $contentData['msg_part'],
+                        'msg_parts' => $contentData['msg_parts'],
+                        'status' => 'success',
+                        'error_major' => "\N",
+                        'error_minor' => "\N",
+                        'error_description' => "\N",
+                        'content' => $contentData['content'],
+                        'rule_id' => "\N",
+                        'action_id' => 0,
+                        'node_id' => $this->faker->randomElement($this->nodeIds),
+                        'traffic_type' => $traffictype
+                    ];
+                }
             }
 
             return $records;
@@ -127,6 +129,7 @@ class CdrSmsTableController
             throw new Exception('Error generating SMSMO fields: ' . $e->getMessage());
         }
     }
+
 
     /**
      * Generates SRI (Status Report Indication) fields based on common values.
@@ -142,11 +145,11 @@ class CdrSmsTableController
 
             return [
                 'id' => $id,
-                'created_at' => $commonValue['sri_created_at']->format('Y-m-d H:i:s'),
+                'created_at' => $commonValue['sri_created_at'],
                 'protocol' => 'ss7',
                 'type' => 'sri',
                 'reference' => $commonValue['reference'],
-                'sri_time' => $commonValue['sri_created_at']->format('Y-m-d H:i:s'),
+                'sri_time' => $commonValue['sri_created_at'],
                 'sri_calling_gt' => $commonValue['smscGt'],
                 'sri_map_gt' => $commonValue['smscGt'],
                 'imsi' => $commonValue['imsi'],
@@ -187,7 +190,6 @@ class CdrSmsTableController
         }
     }
 
-
     /**
      * Generates fields for SMSMT records.
      *
@@ -199,7 +201,12 @@ class CdrSmsTableController
         try {
             $smsmtRecords = [];
             $trafficType = (substr($commonValue['smscGt'], 0, 2) === '94') ? 'local' : 'international';
-            $smsmtCreatedAt = clone $commonValue['sri_created_at'];
+
+            $smsmtCreatedAt = is_string($commonValue['sri_created_at'])
+                ? new \DateTime($commonValue['sri_created_at'])
+                : $commonValue['sri_created_at'];
+
+            $smsmtCreatedAt = clone $smsmtCreatedAt;
             $randomSeconds = rand(0, 2);
             $smsmtCreatedAt->modify("+{$randomSeconds} seconds");
             $smsfwGtArray = explode(',', $_ENV['SMSFW_GT']);
@@ -276,56 +283,53 @@ class CdrSmsTableController
      *
      * @return array An associative array containing common values for SMSMT records. 
      */
+
     public function generateCommonSMSMTValues(string $trafficType, string $startDate, string $endDate, int $numSriSmsmtPairs): array
     {
         try {
-            $commonSMSMTValues = []; // Initialize array to store the values
-            $lastUsedTimestamps = []; // To track timestamps for each virtual IMSI
+            $commonSMSMTValues = [];
+            $lastUsedTimestamps = [];
 
-            // Generate an array of sequential timestamps
-            $timestamps = $this->generateSequentialTimestamps($startDate, $endDate, $numSriSmsmtPairs);
+            // Generate random timestamps, sort them to ensure they are sequential
+            $timestamps = $this->generateRandomTimestamps($startDate, $endDate, $numSriSmsmtPairs);
+            sort($timestamps);
 
             foreach ($timestamps as $sriCreatedAt) {
-                // Generate a new OA (originating address) for each pair
-                $useName = $this->faker->boolean($_ENV['OA_NAMES_PERCENTAGE']);
-
-                if ($useName) {
-                    $oaName = $this->faker->randomElement(explode(',', $_ENV['OA_NAMES']));
-                    $oa = $oaName;
-                } else {
-                    $oaMSISDN = $this->generateMSISDN($trafficType);
-                    $oa = $oaMSISDN;
+                if (is_string($sriCreatedAt)) {
+                    $sriCreatedAt = new \DateTime($sriCreatedAt);
                 }
+
+                // Generate Originating Address (OA)
+                $useName = $this->faker->boolean($_ENV['OA_NAMES_PERCENTAGE']);
+                $oa = $useName ? $this->faker->randomElement(explode(',', $_ENV['OA_NAMES'])) : $this->generateMSISDN($trafficType);
 
                 $oaNames = explode(',', $_ENV['OA_NAMES']);
                 $oaType = (substr($oa, 0, 2) === '94' || in_array($oa, $oaNames)) ? 'local' : 'international';
 
-                // Generate a new DA (destination address) for each pair
+                // Generate Destination Address (DA)
                 $da = $this->generateMSISDN('local_onnet');
 
-                $localSmscGtArray = explode(',', $_ENV['OLO_SMSC_GT']);
-                $intlSmscGtArray = explode(',', $_ENV['INTL_SMSC_GT']);
-                $localSmscGt = $this->faker->randomElement($localSmscGtArray);
-                $intlSmscGt = $this->faker->randomElement($intlSmscGtArray);
-                $smscGt = ($oaType === 'local') ? $localSmscGt : $intlSmscGt;
+                $smscGt = $oaType === 'local'
+                    ? $this->faker->randomElement(explode(',', $_ENV['OLO_SMSC_GT']))
+                    : $this->faker->randomElement(explode(',', $_ENV['INTL_SMSC_GT']));
 
-                // Generate the virtual IMSI
                 $virtualImsi = $this->generateVirtualIMSI();
 
-                // Ensure the timestamp has a minimum 30-minute gap if needed
+                // Ensure a 30-minute gap between timestamps
                 if (isset($lastUsedTimestamps[$virtualImsi])) {
                     $lastUsedTimestamp = $lastUsedTimestamps[$virtualImsi];
-                    $updatedTimestamp = (clone $lastUsedTimestamp)->modify('+30 minutes');
+                    if (is_string($lastUsedTimestamp)) {
+                        $lastUsedTimestamp = new \DateTime($lastUsedTimestamp);
+                    }
 
+                    $updatedTimestamp = (clone $lastUsedTimestamp)->modify('+30 minutes');
                     if ($sriCreatedAt < $updatedTimestamp) {
                         $sriCreatedAt = $updatedTimestamp;
                     }
                 }
 
-                // Update the last used timestamp for this virtual IMSI
                 $lastUsedTimestamps[$virtualImsi] = $sriCreatedAt;
 
-                // Build the common SMS-MT value set
                 $commonSMSMTValues[] = [
                     'reference' => $this->generateReference($sriCreatedAt),
                     'imsi' => $this->generateIMSI($da),
@@ -333,7 +337,7 @@ class CdrSmsTableController
                     'da' => $da,
                     'oa' => $oa,
                     'smscGt' => $smscGt,
-                    'sri_created_at' => $sriCreatedAt,
+                    'sri_created_at' => $sriCreatedAt->format('Y-m-d H:i:s'),
                 ];
             }
 
@@ -343,7 +347,6 @@ class CdrSmsTableController
             throw new Exception('Error generating common SMS MT values: ' . $e->getMessage());
         }
     }
-
     /**
      * Generate SMPP fields for SMS records within a specified date range.
      *
@@ -352,41 +355,43 @@ class CdrSmsTableController
      * @param string $endDate The end date for the record generation.
      * @return array The generated records for SMPP fields.
      */
-    public function generateSMPPFields(string $smppTrafficType, string $startDate, string $endDate): array
+    public function generateSMPPFields(string $smppTrafficType, string $startDate, string $endDate, int $numMessages): array
     {
         try {
-
+            // Mappings and pools initialization
             $localSmppMapping = SmppMappingArrays::$local_smpp_mapping;
             $intlSmppMapping = SmppMappingArrays::$intl_smpp_mapping;
             $esmeToSmsfw = SmppMappingArrays::$esme_to_smsfw;
             $smsfwToSmsc = SmppMappingArrays::$smsfw_to_smsc;
-
-            $isLocal = $smppTrafficType === 'local';
-
-            $smppMapping = $isLocal? $localSmppMapping : $intlSmppMapping ;
+            $localOas = SmppMappingArrays::$local_oa_pool;
+            $intlOas = SmppMappingArrays::$intl_oa_pool;
     
+            $isLocal = $smppTrafficType === 'local';
+            $smppMapping = $isLocal ? $localSmppMapping : $intlSmppMapping;
+            $oaPool = $isLocal ? $localOas : $intlOas;
+    
+            // Generate timestamps for each message (one per message)
+            $timestamps = $this->generateRandomTimestamps($startDate, $endDate, $numMessages);
+    
+            // Mapping ESME IPs to SMSFW and SMSC
             foreach ($smppMapping as &$entry) {
                 $esmeIp = $entry['esme_ip'];
     
-                // Match the ESME IP directly against the comma-separated esme_ip strings
                 $smsfwData = array_filter($esmeToSmsfw, function ($mapping) use ($esmeIp) {
-                    // Check if the current ESME IP is present in the comma-separated string
                     return in_array($esmeIp, explode(',', $mapping['esme_ip']));
                 });
     
-                $smsfwData = reset($smsfwData); 
+                $smsfwData = reset($smsfwData);
     
                 if ($smsfwData) {
                     $smsfwIpandPort = $smsfwData['smsfw_ip_and_port'];
                     $entry['smsfw_ip_and_port'] = $smsfwIpandPort;
     
-                    // Map SMSFW to SMSC directly using smsfwIpandPort
                     $smscData = array_filter($smsfwToSmsc, function ($mapping) use ($smsfwIpandPort) {
                         return $mapping['smsfw_ip_and_port'] === $smsfwIpandPort;
                     });
     
                     $smscData = reset($smscData);
-    
                     if ($smscData) {
                         $entry['smsc_mapping'] = [
                             'smsc_ip' => $smscData['smsc_ip'],
@@ -396,97 +401,93 @@ class CdrSmsTableController
                 }
             }
     
-            $entryIndex = array_rand($smppMapping);
-            $trafficEntry = $smppMapping[$entryIndex];
-    
-            $oa = $trafficEntry['oa'];
-            $systemId = $trafficEntry['system_id'];
-            $virtualVlrGt = $trafficEntry['vlr_gt'];
-            $esmeIp = $trafficEntry['esme_ip'];
-            $smscIp = $trafficEntry['smsc_mapping']['smsc_ip'] ?? '';
-            $smscPort = $trafficEntry['smsc_mapping']['smsc_port'] ?? '';
-    
-            $esmePorts = $this->generatePorts($_ENV['NUM_ESME_PORTS'], $_ENV['ESME_PORT_START'], $_ENV['ESME_PORT_END']);
-    
-            if (!isset($this->smppMapping[$systemId])) {
-                $this->smppMapping[$systemId] = [
-                    'esme_ip' => $esmeIp,
-                    'virtual_vlr_gt' => $virtualVlrGt,
-                    'oa' => $oa,
-                    'esme_ports' => $esmePorts,
-                    'smsc_ip' => $smscIp,
-                    'smsc_port' => $smscPort,
-                ];
-            }
-    
-            $dateRange = $this->generateDateRange($startDate, $endDate);
-            $createdAt = $this->faker->dateTimeBetween($dateRange['start'], $dateRange['end']);
-            $dlrTime = (clone $createdAt)->modify('+1 second');
-    
-            $sarRef = $this->faker->numberBetween(1, 128);
-            $messageId = $this->generateReference($createdAt);
-    
-            $numParts = rand(1, 4);
-            $isUnicode = (bool)rand(0, 1);
-            $messageContents = $this->generateSMSContent($numParts, $isUnicode);
-    
-            $da = $this->generateMSISDN('local_onnet');
-    
-            $esmeIp = $this->smppMapping[$systemId]['esme_ip'];
-            $esmePort = $this->faker->randomElement($this->smppMapping[$systemId]['esme_ports']);
-    
-            $virtualVlrGt = $this->smppMapping[$systemId]['virtual_vlr_gt'];
-            $oa = $this->smppMapping[$systemId]['oa'];
-    
-            $smscIp = $this->smppMapping[$systemId]['smsc_ip'];
-            $smscPort = $this->smppMapping[$systemId]['smsc_port'];
-    
             $records = [];
-            foreach ($messageContents as $contentData) {
+    
+            foreach ($timestamps as $createdAt) {
+                // Randomly pick an OA and traffic entry
+                $oaIndex = array_rand($oaPool);
+                $oa = $oaPool[$oaIndex];
+    
+                $entryIndex = array_rand($smppMapping);
+                $trafficEntry = $smppMapping[$entryIndex];
+    
+                $systemId = $trafficEntry['system_id'];
+                $virtualVlrGt = $trafficEntry['virtual_gt'];
+                $esmeIp = $trafficEntry['esme_ip'];
+                $esmePort = $trafficEntry['esme_port'];
+                $smscIp = $trafficEntry['smsc_mapping']['smsc_ip'] ?? '';
+                $smscPort = $trafficEntry['smsc_mapping']['smsc_port'] ?? '';
+    
+                // Check for system ID mapping and set defaults if necessary
+                if (!isset($this->smppMapping[$systemId])) {
+                    $this->smppMapping[$systemId] = [
+                        'esme_ip' => $esmeIp,
+                        'virtual_vlr_gt' => $virtualVlrGt,
+                        'esme_port' => $esmePort,
+                        'smsc_ip' => $smscIp,
+                        'smsc_port' => $smscPort,
+                    ];
+                }
+    
+                // DLR time (1 second after created_at)
+                $dlrTime = (new \DateTime($createdAt))->modify('+1 second');
+    
+                // Generate message contents
+                $sarRef = $this->faker->numberBetween(1, 128);
+                $messageId = $this->generateReference(new \DateTime($createdAt));
+                $numParts = rand(1, 4);
+                $isUnicode = (bool)rand(0, 1);
+                $messageContents = $this->generateSMSContent($numParts, $isUnicode);
+    
+                $da = $this->generateMSISDN('local_onnet');
                 $trafficType = $isLocal ? 'local' : 'international';
     
-                $id = $this->generateAutoIncrementId();
-                $records[] = [
-                    'id' => $id,
-                    'created_at' => $createdAt->format('Y-m-d H:i:s'),
-                    'protocol' => 'smpp',
-                    'type' => 'smsmt',
-                    'reference' => "\N",
-                    'sri_time' => "\N",
-                    'sri_calling_gt' => "\N",
-                    'sri_map_gt' => "\N",
-                    'imsi' => "\N",
-                    'virtual_imsi' => "\N",
-                    'virtual_vlr_gt' => $virtualVlrGt,
-                    'fwdsm_time' => "\N",
-                    'fwdsm_calling_gt' => "\N",
-                    'fwdsm_map_gt' => "\N",
-                    'esme_ip' => $esmeIp,
-                    'esme_port' => $esmePort,
-                    'smsc_ip' => $smscIp,
-                    'smsc_port' => $smscPort,
-                    'system_id' => $systemId,
-                    'message_id' => $messageId,
-                    'dlr_time' => $dlrTime->format('Y-m-d H:i:s'),
-                    'dlr_status' => "success",
-                    'oa' => $oa,
-                    'da' => $da,
-                    'dcs' => "\N",
-                    'pid' => "\N",
-                    'tpdu_length' => $contentData['tpdu_length'],
-                    'sar_ref' => $sarRef,
-                    'msg_part' => $contentData['msg_part'],
-                    'msg_parts' => $contentData['msg_parts'],
-                    'status' => 'success',
-                    'error_major' => "\N",
-                    'error_minor' => "\N",
-                    'error_description' => "\N",
-                    'content' => $contentData['content'],
-                    'rule_id' => "\N",
-                    'action_id' => 0,
-                    'node_id' => $this->faker->randomElement($this->nodeIds),
-                    'traffic_type' => $trafficType,
-                ];
+                // Loop through message parts and generate the record for each part
+                foreach ($messageContents as $contentData) {
+                    $id = $this->generateAutoIncrementId();
+    
+                    $records[] = [
+                        'id' => $id,
+                        'created_at' => $createdAt,  // Use the same timestamp for all parts of the message
+                        'protocol' => 'smpp',
+                        'type' => 'smsmt',
+                        'reference' => "\N",
+                        'sri_time' => "\N",
+                        'sri_calling_gt' => "\N",
+                        'sri_map_gt' => "\N",
+                        'imsi' => "\N",
+                        'virtual_imsi' => "\N",
+                        'virtual_vlr_gt' => $virtualVlrGt,
+                        'fwdsm_time' => "\N",
+                        'fwdsm_calling_gt' => "\N",
+                        'fwdsm_map_gt' => "\N",
+                        'esme_ip' => $esmeIp,
+                        'esme_port' => $esmePort,
+                        'smsc_ip' => $smscIp,
+                        'smsc_port' => $smscPort,
+                        'system_id' => $systemId,
+                        'message_id' => $messageId,
+                        'dlr_time' => $dlrTime->format('Y-m-d H:i:s'),
+                        'dlr_status' => "success",
+                        'oa' => $oa,
+                        'da' => $da,
+                        'dcs' => "\N",
+                        'pid' => "\N",
+                        'tpdu_length' => $contentData['tpdu_length'],
+                        'sar_ref' => $sarRef,
+                        'msg_part' => $contentData['msg_part'],
+                        'msg_parts' => $contentData['msg_parts'],
+                        'status' => 'success',
+                        'error_major' => "\N",
+                        'error_minor' => "\N",
+                        'error_description' => "\N",
+                        'content' => $contentData['content'],
+                        'rule_id' => "\N",
+                        'action_id' => 0,
+                        'node_id' => $this->faker->randomElement($this->nodeIds),
+                        'traffic_type' => $trafficType,
+                    ];
+                }
             }
     
             return $records;
@@ -495,7 +496,160 @@ class CdrSmsTableController
             throw new Exception('Failed to generate SMPP fields: ' . $e->getMessage());
         }
     }
-    
+        // public function generateSMPPFields(string $smppTrafficType, string $startDate, string $endDate): array
+    // {
+    //     try {
+    //         $jsonFilePath = __DIR__ . '/../../../config/smppMapping.json';
+    //         $jsonData = file_get_contents($jsonFilePath);
+    //         $smppData = json_decode($jsonData, true);
+
+    //         // Check if JSON data loaded correctly
+    //         if ($smppData === null) {
+    //             throw new Exception('Failed to load or parse smppMapping.json');
+    //         }
+
+    //         // Determine if local or international traffic and get the appropriate mappings
+    //         $isLocal = $smppTrafficType === 'local';
+    //         $smppMapping = $isLocal ? $smppData['local_smpp_mapping'] : $smppData['intl_smpp_mapping'];
+    //         $esmeToSmsfw = $smppData['esme_to_smsfw'];
+    //         $smsfwToSmsc = $smppData['smsfw_to_smsc'];
+
+    //         foreach ($smppMapping as &$entry) {
+    //             $esmeIp = $entry['esme_ip'];
+
+    //             // Match the ESME IP against the mappings
+    //             $smsfwData = array_filter($esmeToSmsfw, function ($mapping) use ($esmeIp) {
+    //                 $esmeIps = explode(',', $mapping['esme_ip']);
+    //                 return in_array(trim($esmeIp), array_map('trim', $esmeIps));
+    //             });
+
+    //             // Get the first matching result (if any)
+    //             $smsfwData = reset($smsfwData);
+
+    //             if ($smsfwData) {
+    //                 $smsfwIpandPort = $smsfwData['smsfw_ip_and_port'];
+    //                 $entry['smsfw_ip_and_port'] = $smsfwIpandPort;
+
+    //                 // Map SMSFW to SMSC using smsfwIpandPort
+    //                 $smscData = array_filter($smsfwToSmsc, function ($mapping) use ($smsfwIpandPort) {
+    //                     return $mapping['smsfw_ip_and_port'] === $smsfwIpandPort;
+    //                 });
+
+    //                 $smscData = reset($smscData);
+
+    //                 if ($smscData) {
+    //                     $entry['smsc_mapping'] = [
+    //                         'smsc_ip' => $smscData['smsc_ip'],
+    //                         'smsc_port' => $smscData['smsc_port'],
+    //                     ];
+    //                 }
+    //             }
+    //         }
+
+    //         // Randomly select a traffic entry
+    //         $entryIndex = array_rand($smppMapping);
+    //         $trafficEntry = $smppMapping[$entryIndex];
+
+    //         // Assign fields
+    //         $oa = $trafficEntry['oa'];
+    //         $systemId = $trafficEntry['system_id'];
+    //         $virtualVlrGt = $trafficEntry['vlr_gt'];
+    //         $esmeIp = $trafficEntry['esme_ip'];
+    //         $smscIp = $trafficEntry['smsc_mapping']['smsc_ip'] ?? '';
+    //         $smscPort = $trafficEntry['smsc_mapping']['smsc_port'] ?? '';
+
+    //         // Generate ESME Ports
+    //         $esmePorts = $this->generatePorts($_ENV['NUM_ESME_PORTS'], $_ENV['ESME_PORT_START'], $_ENV['ESME_PORT_END']);
+
+    //         // Initialize smppMapping if not set
+    //         if (!isset($this->smppMapping[$systemId])) {
+    //             $this->smppMapping[$systemId] = [
+    //                 'esme_ip' => $esmeIp,
+    //                 'virtual_vlr_gt' => $virtualVlrGt,
+    //                 'oa' => $oa,
+    //                 'esme_ports' => $esmePorts,
+    //                 'smsc_ip' => $smscIp,
+    //                 'smsc_port' => $smscPort,
+    //             ];
+    //         }
+
+    //         // Generate date range and timestamps
+    //         $dateRange = $this->generateDateRange($startDate, $endDate);
+    //         $createdAt = $this->faker->dateTimeBetween($dateRange['start'], $dateRange['end']);
+    //         $dlrTime = (clone $createdAt)->modify('+1 second');
+
+    //         // Generate SAR reference, message ID, and contents
+    //         $sarRef = $this->faker->numberBetween(1, 128);
+    //         $messageId = $this->generateReference($createdAt);
+    //         $numParts = rand(1, 4);
+    //         $isUnicode = (bool)rand(0, 1);
+    //         $messageContents = $this->generateSMSContent($numParts, $isUnicode);
+
+    //         // Generate Destination Address (MSISDN)
+    //         $da = $this->generateMSISDN('local_onnet');
+
+    //         // Assign ESME details
+    //         $esmeIp = $this->smppMapping[$systemId]['esme_ip'];
+    //         $esmePort = $this->faker->randomElement($this->smppMapping[$systemId]['esme_ports']);
+
+    //         // Prepare records array to return
+    //         $records = [];
+    //         foreach ($messageContents as $contentData) {
+    //             $trafficType = $isLocal ? 'local' : 'international';
+
+    //             $id = $this->generateAutoIncrementId();
+    //             $records[] = [
+    //                 'id' => $id,
+    //                 'created_at' => $createdAt->format('Y-m-d H:i:s'),
+    //                 'protocol' => 'smpp',
+    //                 'type' => 'smsmt',
+    //                 'reference' => "\N",
+    //                 'sri_time' => "\N",
+    //                 'sri_calling_gt' => "\N",
+    //                 'sri_map_gt' => "\N",
+    //                 'imsi' => "\N",
+    //                 'virtual_imsi' => "\N",
+    //                 'virtual_vlr_gt' => $virtualVlrGt,
+    //                 'fwdsm_time' => "\N",
+    //                 'fwdsm_calling_gt' => "\N",
+    //                 'fwdsm_map_gt' => "\N",
+    //                 'esme_ip' => $esmeIp,
+    //                 'esme_port' => $esmePort,
+    //                 'smsc_ip' => $smscIp,
+    //                 'smsc_port' => $smscPort,
+    //                 'system_id' => $systemId,
+    //                 'message_id' => $messageId,
+    //                 'dlr_time' => $dlrTime->format('Y-m-d H:i:s'),
+    //                 'dlr_status' => "success",
+    //                 'oa' => $oa,
+    //                 'da' => $da,
+    //                 'dcs' => "\N",
+    //                 'pid' => "\N",
+    //                 'tpdu_length' => $contentData['tpdu_length'],
+    //                 'sar_ref' => $sarRef,
+    //                 'msg_part' => $contentData['msg_part'],
+    //                 'msg_parts' => $contentData['msg_parts'],
+    //                 'status' => 'success',
+    //                 'error_major' => "\N",
+    //                 'error_minor' => "\N",
+    //                 'error_description' => "\N",
+    //                 'content' => $contentData['content'],
+    //                 'rule_id' => "\N",
+    //                 'action_id' => 0,
+    //                 'node_id' => $this->faker->randomElement($this->nodeIds),
+    //                 'traffic_type' => $trafficType,
+    //             ];
+    //         }
+
+    //         return $records;
+    //     } catch (Exception $e) {
+    //         Logging::logError('Failed to generate SMPP fields: ' . $e->getMessage());
+    //         throw new Exception('Failed to generate SMPP fields: ' . $e->getMessage());
+    //     }
+    // }
+
+
+
     /**
      * Generates a CSV file with the specified number of cdr_sms records.
      * It creates records based on percentages defined in the environment variables.
@@ -638,13 +792,13 @@ class CdrSmsTableController
      */
     public function generateSMSMORecords(int $numRecords, string $trafficType, string $startDate, string $endDate, $csvFile): void
     {
-        for ($i = 0; $i < $numRecords; $i++) {
-            $smsmoRecords = $this->generateSMSMOFields($trafficType, $startDate, $endDate);
-            foreach ($smsmoRecords as $smsmoRecord) {
-                fputcsv($csvFile, $smsmoRecord);
-            }
+        $smsmoRecords = $this->generateSMSMOFields($trafficType, $startDate, $endDate, $numRecords);
+
+        foreach ($smsmoRecords as $smsmoRecord) {
+            fputcsv($csvFile, $smsmoRecord);
         }
     }
+
 
     /**
      * Generates a specified number of SRI-SMSMT record pairs and writes them to the CSV file.
@@ -676,11 +830,10 @@ class CdrSmsTableController
 
     public function generateSMPPRecords(int $numRecords, string $trafficType, string $startDate, string $endDate, $csvFile): void
     {
-        for ($i = 0; $i < $numRecords; $i++) {
-            $smppRecords = $this->generateSMPPFields($trafficType, $startDate, $endDate);
-            foreach ($smppRecords as $smppRecord) {
-                fputcsv($csvFile, $smppRecord);
-            }
+        $smsmoRecords = $this->generateSMPPFields($trafficType, $startDate, $endDate, $numRecords);
+
+        foreach ($smsmoRecords as $smsmoRecord) {
+            fputcsv($csvFile, $smsmoRecord);
         }
     }
 
