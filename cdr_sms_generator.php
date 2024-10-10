@@ -10,16 +10,17 @@ use Dotenv\Dotenv;
 $dotenv = Dotenv::createImmutable(__DIR__);
 $dotenv->load();
 
-$options = getopt("", ["start-date:", "end-date:", "sms-count:"]);
+$options = getopt("", ["start-date:", "end-date:", "sms-count:", "daily-table"]);
 
 if (!isset($options['start-date']) || !isset($options['end-date']) || !isset($options['sms-count'])) {
-    echo "Usage: php cdr_sms_generator.php --start-date=YYYY-MM-DD --end-date=YYYY-MM-DD --row-count=N\n";
+    echo "Usage: php cdr_sms_generator.php --start-date=YYYY-MM-DD --end-date=YYYY-MM-DD --sms-count=N [--daily-tables]\n";
     exit(1);
 }
 
 $startDate = $options['start-date'];
 $endDate = $options['end-date'];
 $rowCount = (int)$options['sms-count'];
+$dailyTables = isset($options['daily-table']);  
 
 if (!$rowCount || !$startDate || !$endDate) {
     echo "Invalid arguments. Please provide valid start-date, end-date, and row-count.\n";
@@ -31,13 +32,23 @@ if (!DateTime::createFromFormat('Y-m-d', $startDate) || !DateTime::createFromFor
     echo "Invalid date format. Use YYYY-MM-DD.\n";
     exit(1);
 }
-//$rowCount = $argv[1];
 
 try {
     $csvGenerator = new CdrSmsTableController();
-    $csvGenerator->generateCSV($rowCount, $startDate, $endDate);
-    echo "CSV file generated and uploaded successfully: " . "\n";
-    Logging::logInfo("CSV generated and uploaded successfully: " . "\n");
+    $filePath = $csvGenerator->generateCSV($rowCount, $startDate, $endDate);
+    echo "CSV file generated and uploaded successfully.\n";
+    Logging::logInfo("CSV generated and uploaded successfully.\n");
+
+    // Ensure the $filePath is passed correctly to the processCSVForDailyTables function
+    if ($dailyTables && $filePath) {
+        $csvGenerator->processCSVForDailyTables($filePath);
+        echo "Daily tables created and uploaded successfully.\n";
+        Logging::logInfo("Daily tables created and uploaded successfully.\n");
+    }else{
+        echo "no daily tables";
+    }
+    
+
 } catch (Exception $e) {
     echo "Error: " . $e->getMessage() . "\n";
     Logging::logError("Error in CSV generation : " . $e->getMessage());

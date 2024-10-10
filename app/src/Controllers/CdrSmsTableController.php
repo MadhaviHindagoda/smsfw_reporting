@@ -13,6 +13,7 @@ use PDOException;
 use Exception;
 use Dotenv\Dotenv;
 use config\Logging;
+use PDO;
 
 $dotenv = Dotenv::createImmutable(__DIR__ . '/../../../');
 $dotenv->load();
@@ -65,7 +66,7 @@ class CdrSmsTableController
                 $intlMscGtArray = explode(',', $_ENV['INTL_MSC_GT']);
                 $localMscGt = $this->faker->randomElement($localMscGtArray);
                 $intlMscGt = $this->faker->randomElement($intlMscGtArray);
-                $mscGt = ($trafficType === 'local') ? $localMscGt : $intlMscGt;
+                $mscGt = ($traffictype === 'local') ? $localMscGt : $intlMscGt;
 
                 $reference = $this->generateReference(new \DateTime($createdAt));
                 $numParts = rand(1, 4);
@@ -365,32 +366,32 @@ class CdrSmsTableController
             $smsfwToSmsc = SmppMappingArrays::$smsfw_to_smsc;
             $localOas = SmppMappingArrays::$local_oa_pool;
             $intlOas = SmppMappingArrays::$intl_oa_pool;
-    
+
             $isLocal = $smppTrafficType === 'local';
             $smppMapping = $isLocal ? $localSmppMapping : $intlSmppMapping;
             $oaPool = $isLocal ? $localOas : $intlOas;
-    
+
             // Generate timestamps for each message (one per message)
             $timestamps = $this->generateRandomTimestamps($startDate, $endDate, $numMessages);
-    
+
             // Mapping ESME IPs to SMSFW and SMSC
             foreach ($smppMapping as &$entry) {
                 $esmeIp = $entry['esme_ip'];
-    
+
                 $smsfwData = array_filter($esmeToSmsfw, function ($mapping) use ($esmeIp) {
                     return in_array($esmeIp, explode(',', $mapping['esme_ip']));
                 });
-    
+
                 $smsfwData = reset($smsfwData);
-    
+
                 if ($smsfwData) {
                     $smsfwIpandPort = $smsfwData['smsfw_ip_and_port'];
                     $entry['smsfw_ip_and_port'] = $smsfwIpandPort;
-    
+
                     $smscData = array_filter($smsfwToSmsc, function ($mapping) use ($smsfwIpandPort) {
                         return $mapping['smsfw_ip_and_port'] === $smsfwIpandPort;
                     });
-    
+
                     $smscData = reset($smscData);
                     if ($smscData) {
                         $entry['smsc_mapping'] = [
@@ -400,24 +401,24 @@ class CdrSmsTableController
                     }
                 }
             }
-    
+
             $records = [];
-    
+
             foreach ($timestamps as $createdAt) {
                 // Randomly pick an OA and traffic entry
                 $oaIndex = array_rand($oaPool);
                 $oa = $oaPool[$oaIndex];
-    
+
                 $entryIndex = array_rand($smppMapping);
                 $trafficEntry = $smppMapping[$entryIndex];
-    
+
                 $systemId = $trafficEntry['system_id'];
                 $virtualVlrGt = $trafficEntry['virtual_gt'];
                 $esmeIp = $trafficEntry['esme_ip'];
                 $esmePort = $trafficEntry['esme_port'];
                 $smscIp = $trafficEntry['smsc_mapping']['smsc_ip'] ?? '';
                 $smscPort = $trafficEntry['smsc_mapping']['smsc_port'] ?? '';
-    
+
                 // Check for system ID mapping and set defaults if necessary
                 if (!isset($this->smppMapping[$systemId])) {
                     $this->smppMapping[$systemId] = [
@@ -428,24 +429,24 @@ class CdrSmsTableController
                         'smsc_port' => $smscPort,
                     ];
                 }
-    
+
                 // DLR time (1 second after created_at)
                 $dlrTime = (new \DateTime($createdAt))->modify('+1 second');
-    
+
                 // Generate message contents
                 $sarRef = $this->faker->numberBetween(1, 128);
                 $messageId = $this->generateReference(new \DateTime($createdAt));
                 $numParts = rand(1, 4);
                 $isUnicode = (bool)rand(0, 1);
                 $messageContents = $this->generateSMSContent($numParts, $isUnicode);
-    
+
                 $da = $this->generateMSISDN('local_onnet');
                 $trafficType = $isLocal ? 'local' : 'international';
-    
+
                 // Loop through message parts and generate the record for each part
                 foreach ($messageContents as $contentData) {
                     $id = $this->generateAutoIncrementId();
-    
+
                     $records[] = [
                         'id' => $id,
                         'created_at' => $createdAt,  // Use the same timestamp for all parts of the message
@@ -489,14 +490,14 @@ class CdrSmsTableController
                     ];
                 }
             }
-    
+
             return $records;
         } catch (Exception $e) {
             Logging::logError('Failed to generate SMPP fields: ' . $e->getMessage());
             throw new Exception('Failed to generate SMPP fields: ' . $e->getMessage());
         }
     }
-        // public function generateSMPPFields(string $smppTrafficType, string $startDate, string $endDate): array
+    // public function generateSMPPFields(string $smppTrafficType, string $startDate, string $endDate): array
     // {
     //     try {
     //         $jsonFilePath = __DIR__ . '/../../../config/smppMapping.json';
@@ -827,7 +828,6 @@ class CdrSmsTableController
         }
     }
 
-
     public function generateSMPPRecords(int $numRecords, string $trafficType, string $startDate, string $endDate, $csvFile): void
     {
         $smsmoRecords = $this->generateSMPPFields($trafficType, $startDate, $endDate, $numRecords);
@@ -877,6 +877,99 @@ class CdrSmsTableController
             // Handle PDO exceptions
             Logging::logError('Database error: ' . $e->getMessage());
             throw new Exception('Database error: ' . $e->getMessage());
+        }
+    }
+
+
+    public function processCSVForDailyTables(string $filePath): void
+    {
+        // Load the CSV
+        $records = $this->loadCSV($filePath);
+
+        // Group records by date
+        $groupedRecords = $this->groupRecordsByDate($records);
+
+        // Insert into daily database tables and save to daily CSV files
+        foreach ($groupedRecords as $date => $dailyRecords) {
+            $this->insertToDailyTables([$date => $dailyRecords]); 
+            $this->saveToDailyCSV([$date => $dailyRecords]); 
+        }
+    }
+
+    private function saveToDailyCSV(array $groupedRecords): void
+    {
+        foreach ($groupedRecords as $date => $records) {
+            $dailyTableName = "cdr_sms_" . str_replace('-', '', $date) . '.csv'; // Format file name as cdr_sms_YYYYMMDD.csv
+            $dailyTablePath = $_ENV['FILE_PATH'] . "/{$dailyTableName}"; // Create full path
+            var_dump($dailyTablePath);
+
+            $handle = fopen($dailyTablePath, 'w');
+
+            // Write header
+            fputcsv($handle, array_keys($records[0]));
+
+            // Write each record
+            foreach ($records as $record) {
+                fputcsv($handle, $record);
+            }
+
+            fclose($handle);
+            echo "Created daily CSV for {$date}: {$dailyTablePath}\n";
+        }
+    }
+
+
+    function loadCSV(string $filePath): array
+    {
+        $rows = [];
+        if (($handle = fopen($filePath, "r")) !== false) {
+            $header = fgetcsv($handle);  // Get header row
+            while (($data = fgetcsv($handle)) !== false) {
+                $rows[] = array_combine($header, $data);  // Combine header with row data
+            }
+            fclose($handle);
+        }
+        return $rows;
+    }
+
+    function groupRecordsByDate(array $records): array
+    {
+        $groupedRecords = [];
+
+        foreach ($records as $record) {
+            $date = substr($record['created_at'], 0, 10);  // Extract date (YYYY-MM-DD)
+            if (!isset($groupedRecords[$date])) {
+                $groupedRecords[$date] = [];
+            }
+            $groupedRecords[$date][] = $record;
+        }
+
+        return $groupedRecords;
+    }
+
+    function insertToDailyTables(array $groupedRecords): void
+    {
+        foreach ($groupedRecords as $date => $records) {
+            // Generate table name
+            $tableName = 'cdr_sms_' . str_replace('-', '', $date);
+
+            // Ensure the table exists
+            $createTableSQL = "CREATE TABLE IF NOT EXISTS {$tableName} LIKE cdr_sms";
+            $this->pdo->exec($createTableSQL);
+
+            // Prepare the insert query (adjust based on your table structure)
+            $fields = implode(", ", array_keys($records[0]));
+            $placeholders = implode(", ", array_fill(0, count($records[0]), '?'));
+
+            $insertSQL = "INSERT INTO {$tableName} ({$fields}) VALUES ({$placeholders})";
+            $stmt = $this->pdo->prepare($insertSQL);
+
+            // Insert each record into the relevant daily table
+            foreach ($records as $record) {
+                $stmt->execute(array_values($record));
+            }
+
+            echo "Inserted records for {$date} into table {$tableName}\n";
         }
     }
 }

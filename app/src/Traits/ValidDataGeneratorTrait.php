@@ -9,6 +9,7 @@ use Dotenv\Dotenv;
 use InvalidArgumentException;
 use PDOException;
 use Exception;
+use PDO;
 
 $dotenv = Dotenv::createImmutable(__DIR__ . '/../../../');
 $dotenv->load();
@@ -360,29 +361,6 @@ trait ValidDataGeneratorTrait
     }
 
 
-    private function generateIPs(string $startIp, string $endIp): array
-    {
-        $startLong = ip2long($startIp);
-        $endLong = ip2long($endIp);
-
-        if ($startLong === false || $endLong === false) {
-            throw new Exception("Invalid IP address format: startIp = $startIp, endIp = $endIp");
-        }
-
-        if ($startLong > $endLong) {
-            throw new Exception("Start IP ($startIp) is greater than end IP ($endIp)");
-        }
-
-        $ips = [];
-        while ($startLong <= $endLong) {
-            $ips[] = long2ip($startLong);
-            $startLong++;
-        }
-
-        return $ips;
-    }
-
-
     /**
      * Retrieves node IDs by populating the 'nodes' table with test data and storing the IDs.
      * 
@@ -409,29 +387,4 @@ trait ValidDataGeneratorTrait
         $this->nodeIds = array_column($data, 'id');
     }
 
-    private function fetchOATrafficData(string $type): array
-    {
-        $table = $type === 'local' ? 'smpp_oa_local' : 'smpp_oa_intl';
-        $query = "SELECT * FROM $table";
-        return $this->executeQuery($query);
-    }
-
-    private function fetchShortCodeData(): array
-    {
-        $query = "SELECT * FROM smpp_short_codes";
-        return $this->executeQuery($query);
-    }
-
-    private function fetchMSISDNData(): array
-    {
-        $query = "SELECT * FROM smpp_msisdn_oa_local";
-        return $this->executeQuery($query);
-    }
-
-    private function executeQuery(string $query): array
-    {
-        // Replace with your database connection logic
-        $result = $this->dbConnection->query($query);
-        return $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
-    }
 }
