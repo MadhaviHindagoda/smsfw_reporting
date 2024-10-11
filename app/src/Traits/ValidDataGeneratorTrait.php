@@ -387,4 +387,19 @@ trait ValidDataGeneratorTrait
         $this->nodeIds = array_column($data, 'id');
     }
 
+    private function distributeRowCountRandomly(int $totalCount, int $days): array
+    {
+        $distribution = [];
+        $remaining = $totalCount;
+
+        for ($i = 0; $i < $days - 1; $i++) {
+            $randomCount = rand(1, (int)($remaining / ($days - $i)) * 2); 
+            $distribution[] = $randomCount;
+            $remaining -= $randomCount;
+        }
+
+        $distribution[] = $remaining;
+
+        return $distribution;
+    }
 }

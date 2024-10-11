@@ -497,294 +497,8 @@ class CdrSmsTableController
             throw new Exception('Failed to generate SMPP fields: ' . $e->getMessage());
         }
     }
-    // public function generateSMPPFields(string $smppTrafficType, string $startDate, string $endDate): array
-    // {
-    //     try {
-    //         $jsonFilePath = __DIR__ . '/../../../config/smppMapping.json';
-    //         $jsonData = file_get_contents($jsonFilePath);
-    //         $smppData = json_decode($jsonData, true);
 
-    //         // Check if JSON data loaded correctly
-    //         if ($smppData === null) {
-    //             throw new Exception('Failed to load or parse smppMapping.json');
-    //         }
-
-    //         // Determine if local or international traffic and get the appropriate mappings
-    //         $isLocal = $smppTrafficType === 'local';
-    //         $smppMapping = $isLocal ? $smppData['local_smpp_mapping'] : $smppData['intl_smpp_mapping'];
-    //         $esmeToSmsfw = $smppData['esme_to_smsfw'];
-    //         $smsfwToSmsc = $smppData['smsfw_to_smsc'];
-
-    //         foreach ($smppMapping as &$entry) {
-    //             $esmeIp = $entry['esme_ip'];
-
-    //             // Match the ESME IP against the mappings
-    //             $smsfwData = array_filter($esmeToSmsfw, function ($mapping) use ($esmeIp) {
-    //                 $esmeIps = explode(',', $mapping['esme_ip']);
-    //                 return in_array(trim($esmeIp), array_map('trim', $esmeIps));
-    //             });
-
-    //             // Get the first matching result (if any)
-    //             $smsfwData = reset($smsfwData);
-
-    //             if ($smsfwData) {
-    //                 $smsfwIpandPort = $smsfwData['smsfw_ip_and_port'];
-    //                 $entry['smsfw_ip_and_port'] = $smsfwIpandPort;
-
-    //                 // Map SMSFW to SMSC using smsfwIpandPort
-    //                 $smscData = array_filter($smsfwToSmsc, function ($mapping) use ($smsfwIpandPort) {
-    //                     return $mapping['smsfw_ip_and_port'] === $smsfwIpandPort;
-    //                 });
-
-    //                 $smscData = reset($smscData);
-
-    //                 if ($smscData) {
-    //                     $entry['smsc_mapping'] = [
-    //                         'smsc_ip' => $smscData['smsc_ip'],
-    //                         'smsc_port' => $smscData['smsc_port'],
-    //                     ];
-    //                 }
-    //             }
-    //         }
-
-    //         // Randomly select a traffic entry
-    //         $entryIndex = array_rand($smppMapping);
-    //         $trafficEntry = $smppMapping[$entryIndex];
-
-    //         // Assign fields
-    //         $oa = $trafficEntry['oa'];
-    //         $systemId = $trafficEntry['system_id'];
-    //         $virtualVlrGt = $trafficEntry['vlr_gt'];
-    //         $esmeIp = $trafficEntry['esme_ip'];
-    //         $smscIp = $trafficEntry['smsc_mapping']['smsc_ip'] ?? '';
-    //         $smscPort = $trafficEntry['smsc_mapping']['smsc_port'] ?? '';
-
-    //         // Generate ESME Ports
-    //         $esmePorts = $this->generatePorts($_ENV['NUM_ESME_PORTS'], $_ENV['ESME_PORT_START'], $_ENV['ESME_PORT_END']);
-
-    //         // Initialize smppMapping if not set
-    //         if (!isset($this->smppMapping[$systemId])) {
-    //             $this->smppMapping[$systemId] = [
-    //                 'esme_ip' => $esmeIp,
-    //                 'virtual_vlr_gt' => $virtualVlrGt,
-    //                 'oa' => $oa,
-    //                 'esme_ports' => $esmePorts,
-    //                 'smsc_ip' => $smscIp,
-    //                 'smsc_port' => $smscPort,
-    //             ];
-    //         }
-
-    //         // Generate date range and timestamps
-    //         $dateRange = $this->generateDateRange($startDate, $endDate);
-    //         $createdAt = $this->faker->dateTimeBetween($dateRange['start'], $dateRange['end']);
-    //         $dlrTime = (clone $createdAt)->modify('+1 second');
-
-    //         // Generate SAR reference, message ID, and contents
-    //         $sarRef = $this->faker->numberBetween(1, 128);
-    //         $messageId = $this->generateReference($createdAt);
-    //         $numParts = rand(1, 4);
-    //         $isUnicode = (bool)rand(0, 1);
-    //         $messageContents = $this->generateSMSContent($numParts, $isUnicode);
-
-    //         // Generate Destination Address (MSISDN)
-    //         $da = $this->generateMSISDN('local_onnet');
-
-    //         // Assign ESME details
-    //         $esmeIp = $this->smppMapping[$systemId]['esme_ip'];
-    //         $esmePort = $this->faker->randomElement($this->smppMapping[$systemId]['esme_ports']);
-
-    //         // Prepare records array to return
-    //         $records = [];
-    //         foreach ($messageContents as $contentData) {
-    //             $trafficType = $isLocal ? 'local' : 'international';
-
-    //             $id = $this->generateAutoIncrementId();
-    //             $records[] = [
-    //                 'id' => $id,
-    //                 'created_at' => $createdAt->format('Y-m-d H:i:s'),
-    //                 'protocol' => 'smpp',
-    //                 'type' => 'smsmt',
-    //                 'reference' => "\N",
-    //                 'sri_time' => "\N",
-    //                 'sri_calling_gt' => "\N",
-    //                 'sri_map_gt' => "\N",
-    //                 'imsi' => "\N",
-    //                 'virtual_imsi' => "\N",
-    //                 'virtual_vlr_gt' => $virtualVlrGt,
-    //                 'fwdsm_time' => "\N",
-    //                 'fwdsm_calling_gt' => "\N",
-    //                 'fwdsm_map_gt' => "\N",
-    //                 'esme_ip' => $esmeIp,
-    //                 'esme_port' => $esmePort,
-    //                 'smsc_ip' => $smscIp,
-    //                 'smsc_port' => $smscPort,
-    //                 'system_id' => $systemId,
-    //                 'message_id' => $messageId,
-    //                 'dlr_time' => $dlrTime->format('Y-m-d H:i:s'),
-    //                 'dlr_status' => "success",
-    //                 'oa' => $oa,
-    //                 'da' => $da,
-    //                 'dcs' => "\N",
-    //                 'pid' => "\N",
-    //                 'tpdu_length' => $contentData['tpdu_length'],
-    //                 'sar_ref' => $sarRef,
-    //                 'msg_part' => $contentData['msg_part'],
-    //                 'msg_parts' => $contentData['msg_parts'],
-    //                 'status' => 'success',
-    //                 'error_major' => "\N",
-    //                 'error_minor' => "\N",
-    //                 'error_description' => "\N",
-    //                 'content' => $contentData['content'],
-    //                 'rule_id' => "\N",
-    //                 'action_id' => 0,
-    //                 'node_id' => $this->faker->randomElement($this->nodeIds),
-    //                 'traffic_type' => $trafficType,
-    //             ];
-    //         }
-
-    //         return $records;
-    //     } catch (Exception $e) {
-    //         Logging::logError('Failed to generate SMPP fields: ' . $e->getMessage());
-    //         throw new Exception('Failed to generate SMPP fields: ' . $e->getMessage());
-    //     }
-    // }
-
-
-
-    /**
-     * Generates a CSV file with the specified number of cdr_sms records.
-     * It creates records based on percentages defined in the environment variables.
-     *
-     * @param int $rowCount The total number of rows to generate in the CSV file.
-     * @return string The path to the generated CSV file.
-     */
-    public function generateCSV(int $rowCount, string $startDate, string $endDate): string
-    {
-        try {
-            $this->getNodeIds();
-            $fileName = "cdr_sms_" . uniqid() . '.csv';
-            $filePath = $_ENV['FILE_PATH'] . "/{$fileName}";
-
-            $csvFile = fopen($filePath, 'w');
-
-            if ($csvFile === false) {
-                throw new Exception('Failed to open file for writing.');
-            }
-
-            $header = [
-                'id',
-                'created_at',
-                'protocol',
-                'type',
-                'reference',
-                'sri_time',
-                'sri_calling_gt',
-                'sri_map_gt',
-                'imsi',
-                'virtual_imsi',
-                'virtual_vlr_gt',
-                'fwdsm_time',
-                'fwdsm_calling_gt',
-                'fwdsm_map_gt',
-                'esme_ip',
-                'esme_port',
-                'smsc_ip',
-                'smsc_port',
-                'system_id',
-                'message_id',
-                'dlr_time',
-                'dlr_status',
-                'oa',
-                'da',
-                'dcs',
-                'pid',
-                'tpdu_length',
-                'sar_ref',
-                'msg_part',
-                'msg_parts',
-                'status',
-                'error_major',
-                'error_minor',
-                'error_description',
-                'content',
-                'rule_id',
-                'action_id',
-                'node_id',
-                'traffic_type'
-            ];
-
-            fputcsv($csvFile, $header);
-
-            $recordTypePercentages = [
-                'smsmo' => $_ENV['SMSMO'],
-                'srismsmt' => $_ENV['SRI_SMSMT'],
-                'smpp' => $_ENV['SMPP']
-            ];
-
-            $trafficTypePercentagesSMSMO = [
-                'local_onnet' => $_ENV['SMSMO_LOCAL_ONNET'],
-                'local_olo' => $_ENV['SMSMO_LOCAL_OLO'],
-                'international' => $_ENV['SMSMO_INTERNATIONAL']
-            ];
-
-            $trafficTypePercentagesSRISMSMT = [
-                'local_olo' => $_ENV['SRI_SMSMT_LOCAL_OLO'],
-                'international' => $_ENV['SRI_SMSMT_INTERNATIONAL']
-            ];
-
-            $trafficTypePercentagesSMPP = [
-                'local' => $_ENV['SMPP_LOCAL'],
-                'international' => $_ENV['SMPP_INTERNATIONAL']
-            ];
-
-            // Calculate the distribution of records for SMSMO, SRI and SMSMT by traffic type
-            $numSMSMO = round($rowCount * ($recordTypePercentages['smsmo'] / 100));
-            $numSriSmsmtPairs = round($rowCount * ($recordTypePercentages['srismsmt'] / 100));
-            $numSMPP = round($rowCount * ($recordTypePercentages['smpp'] / 100));
-
-
-            $numSmsmoOnnet = round($numSMSMO * ($trafficTypePercentagesSMSMO['local_onnet'] / 100));
-            $numSmsmoOlo = round($numSMSMO * ($trafficTypePercentagesSMSMO['local_olo'] / 100));
-            $numSmsmoIntl = round($numSMSMO * ($trafficTypePercentagesSMSMO['international'] / 100));
-
-            $numSmsmtOlo = round($numSriSmsmtPairs * ($trafficTypePercentagesSRISMSMT['local_olo'] / 100));
-            $numSmsmtIntl = round($numSriSmsmtPairs * ($trafficTypePercentagesSRISMSMT['international'] / 100));
-
-            $numSmppLocal = round($numSMPP * ($trafficTypePercentagesSMPP['local'] / 100));
-            $numSmppIntl = round($numSMPP * ($trafficTypePercentagesSMPP['international'] / 100));
-
-            // Generate SMSMO records
-            $this->generateSMSMORecords($numSmsmoOnnet, 'local_onnet', $startDate, $endDate, $csvFile);
-            $this->generateSMSMORecords($numSmsmoOlo, 'local_olo', $startDate, $endDate, $csvFile);
-            $this->generateSMSMORecords($numSmsmoIntl, 'international', $startDate, $endDate, $csvFile);
-            Logging::logInfo("SMSMO Records generated ");
-
-
-            // Generate pairs of SRI and SMSMT records
-            $this->generateSRISMSMTRecords('local_olo', $startDate, $endDate, $numSmsmtOlo, $csvFile);
-            $this->generateSRISMSMTRecords('international', $startDate, $endDate, $numSmsmtIntl, $csvFile);
-            Logging::logInfo("SRI and SMSMT Records generated");
-
-            // Generate SMPP records
-            $this->generateSMPPRecords($numSmppLocal, 'local', $startDate, $endDate, $csvFile);
-            $this->generateSMPPRecords($numSmppIntl, 'international', $startDate, $endDate, $csvFile);
-            Logging::logInfo("SMPP Records generated");
-
-            fclose($csvFile);
-
-            Logging::logInfo("CSV file generated at: {$filePath}");
-            echo "CSV file generated at: {$filePath}";
-
-            $this->uploadCSV($filePath, implode(',', $header));
-
-            return $filePath;
-        } catch (Exception $e) {
-            Logging::logError('Error generating CSV: ' . $e->getMessage());
-            throw new Exception('Error generating CSV: ' . $e->getMessage());
-        }
-    }
-
-    /**
+     /**
      * Generates a specified number of SMSMO records and writes them to the CSV file.
      *
      * @param int $numRecords The number of SMSMO records to generate.
@@ -848,128 +562,202 @@ class CdrSmsTableController
      * 
      * @throws Exception If the file does not exist or there is a database error.
      */
-    public function uploadCSV(string $filePath, string $header): void
+
+    public function uploadCSV(string $filePath, string $header, ?string $tableName): void
     {
         try {
-            // Check if file exists
-            if (!file_exists($filePath)) {
-                throw new Exception('CSV file does not exist.');
-            }
 
-            // Define the SQL query for loading data
+            file_exists($filePath) ?: throw new Exception('CSV file does not exist.');
+
             $importQuery = "
-            LOAD DATA INFILE '{$filePath}'
-            INTO TABLE cdr_sms
-            FIELDS TERMINATED BY ',' 
-            ENCLOSED BY '\"'
-            LINES TERMINATED BY '\\n'
-            IGNORE 1 LINES
-            ({$header})
-            ";
+        LOAD DATA INFILE '{$filePath}'
+        INTO TABLE {$tableName}
+        FIELDS TERMINATED BY ',' 
+        ENCLOSED BY '\"'
+        LINES TERMINATED BY '\\n'
+        IGNORE 1 LINES
+        ({$header})
+        ";
 
-            // Prepare and execute the query
             $stmt = $this->pdo->prepare($importQuery);
             $stmt->execute();
 
-            // Log success message
-            Logging::logInfo('CSV file uploaded to database successfully.');
+            Logging::logInfo("CSV file uploaded to {$tableName} table successfully.");
         } catch (PDOException $e) {
-            // Handle PDO exceptions
             Logging::logError('Database error: ' . $e->getMessage());
             throw new Exception('Database error: ' . $e->getMessage());
         }
     }
 
-
-    public function processCSVForDailyTables(string $filePath): void
+    private function createDailyTable(string $tableName): void
     {
-        // Load the CSV
-        $records = $this->loadCSV($filePath);
-
-        // Group records by date
-        $groupedRecords = $this->groupRecordsByDate($records);
-
-        // Insert into daily database tables and save to daily CSV files
-        foreach ($groupedRecords as $date => $dailyRecords) {
-            $this->insertToDailyTables([$date => $dailyRecords]); 
-            $this->saveToDailyCSV([$date => $dailyRecords]); 
-        }
-    }
-
-    private function saveToDailyCSV(array $groupedRecords): void
-    {
-        foreach ($groupedRecords as $date => $records) {
-            $dailyTableName = "cdr_sms_" . str_replace('-', '', $date) . '.csv'; // Format file name as cdr_sms_YYYYMMDD.csv
-            $dailyTablePath = $_ENV['FILE_PATH'] . "/{$dailyTableName}"; // Create full path
-            var_dump($dailyTablePath);
-
-            $handle = fopen($dailyTablePath, 'w');
-
-            // Write header
-            fputcsv($handle, array_keys($records[0]));
-
-            // Write each record
-            foreach ($records as $record) {
-                fputcsv($handle, $record);
-            }
-
-            fclose($handle);
-            echo "Created daily CSV for {$date}: {$dailyTablePath}\n";
-        }
-    }
-
-
-    function loadCSV(string $filePath): array
-    {
-        $rows = [];
-        if (($handle = fopen($filePath, "r")) !== false) {
-            $header = fgetcsv($handle);  // Get header row
-            while (($data = fgetcsv($handle)) !== false) {
-                $rows[] = array_combine($header, $data);  // Combine header with row data
-            }
-            fclose($handle);
-        }
-        return $rows;
-    }
-
-    function groupRecordsByDate(array $records): array
-    {
-        $groupedRecords = [];
-
-        foreach ($records as $record) {
-            $date = substr($record['created_at'], 0, 10);  // Extract date (YYYY-MM-DD)
-            if (!isset($groupedRecords[$date])) {
-                $groupedRecords[$date] = [];
-            }
-            $groupedRecords[$date][] = $record;
-        }
-
-        return $groupedRecords;
-    }
-
-    function insertToDailyTables(array $groupedRecords): void
-    {
-        foreach ($groupedRecords as $date => $records) {
-            // Generate table name
-            $tableName = 'cdr_sms_' . str_replace('-', '', $date);
-
-            // Ensure the table exists
+        try {
             $createTableSQL = "CREATE TABLE IF NOT EXISTS {$tableName} LIKE cdr_sms";
-            $this->pdo->exec($createTableSQL);
+            $stmt = $this->pdo->prepare($createTableSQL);
+            $stmt->execute();
 
-            // Prepare the insert query (adjust based on your table structure)
-            $fields = implode(", ", array_keys($records[0]));
-            $placeholders = implode(", ", array_fill(0, count($records[0]), '?'));
-
-            $insertSQL = "INSERT INTO {$tableName} ({$fields}) VALUES ({$placeholders})";
-            $stmt = $this->pdo->prepare($insertSQL);
-
-            // Insert each record into the relevant daily table
-            foreach ($records as $record) {
-                $stmt->execute(array_values($record));
-            }
-
-            echo "Inserted records for {$date} into table {$tableName}\n";
+            Logging::logInfo("Table {$tableName} created.");
+        } catch (PDOException $e) {
+            Logging::logError('Error creating table: ' . $e->getMessage());
+            throw new Exception('Error creating table: ' . $e->getMessage());
         }
     }
-}
+
+    public function generateRecords(int $rowCount, string $startDate, string $endDate, bool $isDailyTable = false): void
+    {
+        try {
+            $this->getNodeIds();
+            $header = [
+                'id',
+                'created_at',
+                'protocol',
+                'type',
+                'reference',
+                'sri_time',
+                'sri_calling_gt',
+                'sri_map_gt',
+                'imsi',
+                'virtual_imsi',
+                'virtual_vlr_gt',
+                'fwdsm_time',
+                'fwdsm_calling_gt',
+                'fwdsm_map_gt',
+                'esme_ip',
+                'esme_port',
+                'smsc_ip',
+                'smsc_port',
+                'system_id',
+                'message_id',
+                'dlr_time',
+                'dlr_status',
+                'oa',
+                'da',
+                'dcs',
+                'pid',
+                'tpdu_length',
+                'sar_ref',
+                'msg_part',
+                'msg_parts',
+                'status',
+                'error_major',
+                'error_minor',
+                'error_description',
+                'content',
+                'rule_id',
+                'action_id',
+                'node_id',
+                'traffic_type'
+            ];
+    
+            if ($isDailyTable) {
+                $currentDate = new \DateTime($startDate);
+                $endDateObject = new \DateTime($endDate); 
+                $daysDiff = $endDateObject->diff($currentDate)->days + 1;
+                $dailyCounts = $this->distributeRowCountRandomly($rowCount, $daysDiff);
+                $dayIndex = 0;
+    
+                // Loop for each day in the range
+                while ($currentDate <= $endDateObject) {
+                    $dateString = $currentDate->format('Ymd');
+
+                    // Set startDate and endDate for each daily table
+                    $currentStartDate = $dateString;
+                    $currentEndDate = $dateString;
+    
+                    $fileName = "cdr_sms_{$dateString}_".uniqid().".csv";
+                    $filePath = $_ENV['FILE_PATH'] . "/{$fileName}";
+                    $csvFile = fopen($filePath, 'w');
+                    if ($csvFile === false) {
+                        throw new Exception('Failed to open file for writing.');
+                    }
+    
+                    fputcsv($csvFile, $header);
+                    $numRecords = $dailyCounts[$dayIndex];
+                    $dayIndex++;
+    
+                    // Calculate record distribution
+                    $numSMSMO = round($numRecords * ($_ENV['SMSMO'] / 100));
+                    $numSriSmsmtPairs = round($numRecords * ($_ENV['SRI_SMSMT'] / 100));
+                    $numSMPP = round($numRecords * ($_ENV['SMPP'] / 100));
+    
+                    $numSmsmoOnnet = round($numSMSMO * ($_ENV['SMSMO_LOCAL_ONNET'] / 100));
+                    $numSmsmoOlo = round($numSMSMO * ($_ENV['SMSMO_LOCAL_OLO'] / 100));
+                    $numSmsmoIntl = round($numSMSMO * ($_ENV['SMSMO_INTERNATIONAL'] / 100));
+    
+                    $numSmsmtOlo = round($numSriSmsmtPairs * ($_ENV['SRI_SMSMT_LOCAL_OLO'] / 100));
+                    $numSmsmtIntl = round($numSriSmsmtPairs * ($_ENV['SRI_SMSMT_INTERNATIONAL'] / 100));
+    
+                    $numSmppLocal = round($numSMPP * ($_ENV['SMPP_LOCAL'] / 100));
+                    $numSmppIntl = round($numSMPP * ($_ENV['SMPP_INTERNATIONAL'] / 100));
+    
+                    // Generate records for each traffic type
+                    $this->generateSMSMORecords($numSmsmoOnnet, 'local_onnet', $currentStartDate, $currentEndDate, $csvFile);
+                    $this->generateSMSMORecords($numSmsmoOlo, 'local_olo', $currentStartDate, $currentEndDate, $csvFile);
+                    $this->generateSMSMORecords($numSmsmoIntl, 'international', $currentStartDate, $currentEndDate, $csvFile);
+    
+                    $this->generateSRISMSMTRecords('local_olo', $currentStartDate, $currentEndDate, $numSmsmtOlo, $csvFile);
+                    $this->generateSRISMSMTRecords('international', $currentStartDate, $currentEndDate, $numSmsmtIntl, $csvFile);
+    
+                    $this->generateSMPPRecords($numSmppLocal, 'local', $currentStartDate, $currentEndDate, $csvFile);
+                    $this->generateSMPPRecords($numSmppIntl, 'international', $currentStartDate, $currentEndDate, $csvFile);
+    
+                    fclose($csvFile);
+    
+                    // Create daily table and upload CSV
+                    $this->createDailyTable("cdr_sms_{$dateString}");
+                    $this->uploadCSV($filePath, implode(',', $header), "cdr_sms_{$dateString}");
+                    echo "csv file generated in $filePath and uploaded cdr_sms_{$dateString}.\n";
+                    Logging::logInfo("csv file generated in $filePath and uploaded cdr_sms_{$dateString}\n");
+
+                    // Move to the next day
+                    $currentDate->modify('+1 day');
+                }
+    
+            } else {
+                // Generate cdr_sms table
+                $fileName = "cdr_sms_" . uniqid() . '.csv';
+                $filePath = $_ENV['FILE_PATH'] . "/{$fileName}";
+                $csvFile = fopen($filePath, 'w');
+                if ($csvFile === false) {
+                    throw new Exception('Failed to open file for writing.');
+                }
+    
+                fputcsv($csvFile, $header);
+    
+                // Calculate record distribution
+                $numSMSMO = round($rowCount * ($_ENV['SMSMO'] / 100));
+                $numSriSmsmtPairs = round($rowCount * ($_ENV['SRI_SMSMT'] / 100));
+                $numSMPP = round($rowCount * ($_ENV['SMPP'] / 100));
+    
+                $numSmsmoOnnet = round($numSMSMO * ($_ENV['SMSMO_LOCAL_ONNET'] / 100));
+                $numSmsmoOlo = round($numSMSMO * ($_ENV['SMSMO_LOCAL_OLO'] / 100));
+                $numSmsmoIntl = round($numSMSMO * ($_ENV['SMSMO_INTERNATIONAL'] / 100));
+    
+                $numSmsmtOlo = round($numSriSmsmtPairs * ($_ENV['SRI_SMSMT_LOCAL_OLO'] / 100));
+                $numSmsmtIntl = round($numSriSmsmtPairs * ($_ENV['SRI_SMSMT_INTERNATIONAL'] / 100));
+    
+                $numSmppLocal = round($numSMPP * ($_ENV['SMPP_LOCAL'] / 100));
+                $numSmppIntl = round($numSMPP * ($_ENV['SMPP_INTERNATIONAL'] / 100));
+    
+                // Generate records for the entire range
+                $this->generateSMSMORecords($numSmsmoOnnet, 'local_onnet', $startDate, $endDate, $csvFile);
+                $this->generateSMSMORecords($numSmsmoOlo, 'local_olo', $startDate, $endDate, $csvFile);
+                $this->generateSMSMORecords($numSmsmoIntl, 'international', $startDate, $endDate, $csvFile);
+    
+                $this->generateSRISMSMTRecords('local_olo', $startDate, $endDate, $numSmsmtOlo, $csvFile);
+                $this->generateSRISMSMTRecords('international', $startDate, $endDate, $numSmsmtIntl, $csvFile);
+    
+                $this->generateSMPPRecords($numSmppLocal, 'local', $startDate, $endDate, $csvFile);
+                $this->generateSMPPRecords($numSmppIntl, 'international', $startDate, $endDate, $csvFile);
+    
+                fclose($csvFile);
+                $this->uploadCSV($filePath, implode(',', $header), 'cdr_sms');
+                Logging::logInfo("CSV file generated at: {$filePath}");
+                echo"CSV file generated at: {$filePath}";
+            }
+        } catch (Exception $e) {
+            Logging::logError('Error generating records: ' . $e->getMessage());
+            throw new Exception('Error generating records: ' . $e->getMessage());
+        }
+    }
+}    

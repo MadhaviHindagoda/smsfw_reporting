@@ -189,7 +189,7 @@ class SmppMappingArrays
         ['esme_ip' => '203.0.113.23', 'esme_port' => '2778', 'smsfw_ip_and_port' => '10.211.3.13:10012'],
         ['esme_ip' => '203.0.113.24', 'esme_port' => '2779', 'smsfw_ip_and_port' => '10.211.3.14:10013'],
         ['esme_ip' => '203.0.113.25', 'esme_port' => '2780', 'smsfw_ip_and_port' => '10.211.3.15:10014'],
-        ['esme_ip' => '203.0.113.26', 'esme_port' => '2781', 'smsfw_ip_and_port' => '10.211.3.16:10115'],
+        ['esme_ip' => '203.0.113.26', 'esme_port' => '2781', 'smsfw_ip_and_port' => '10.211.3.16:10015'],
         ['esme_ip' => '203.0.113.27', 'esme_port' => '2782', 'smsfw_ip_and_port' => '10.211.3.17:10016'],
         ['esme_ip' => '203.0.113.28', 'esme_port' => '2783', 'smsfw_ip_and_port' => '10.211.3.18:10017'],
     
@@ -232,6 +232,7 @@ class SmppMappingArrays
         ['smsfw_ip_and_port' => '10.211.3.22:10021', 'smsc_ip' => '10.201.3.22', 'smsc_port' => '20020'],
         ['smsfw_ip_and_port' => '10.211.3.23:10022', 'smsc_ip' => '10.201.3.23', 'smsc_port' => '20021'],
         ['smsfw_ip_and_port' => '10.211.3.24:10023', 'smsc_ip' => '10.201.3.24', 'smsc_port' => '20022'],
+
     ];
 
     public static $local_oa_pool = [

@@ -20,7 +20,7 @@ if (!isset($options['start-date']) || !isset($options['end-date']) || !isset($op
 $startDate = $options['start-date'];
 $endDate = $options['end-date'];
 $rowCount = (int)$options['sms-count'];
-$dailyTables = isset($options['daily-table']);  
+$dailyTables = isset($options['daily-table']);
 
 if (!$rowCount || !$startDate || !$endDate) {
     echo "Invalid arguments. Please provide valid start-date, end-date, and row-count.\n";
@@ -34,26 +34,21 @@ if (!DateTime::createFromFormat('Y-m-d', $startDate) || !DateTime::createFromFor
 }
 
 try {
+    // Initialize the controller
     $csvGenerator = new CdrSmsTableController();
-    $filePath = $csvGenerator->generateCSV($rowCount, $startDate, $endDate);
-    echo "CSV file generated and uploaded successfully.\n";
-    Logging::logInfo("CSV generated and uploaded successfully.\n");
 
-    // Ensure the $filePath is passed correctly to the processCSVForDailyTables function
-    if ($dailyTables && $filePath) {
-        $csvGenerator->processCSVForDailyTables($filePath);
+    $csvGenerator->generateRecords($rowCount, $startDate, $endDate, $dailyTables);
+
+    // Log and output success messages
+    if ($dailyTables) {
         echo "Daily tables created and uploaded successfully.\n";
         Logging::logInfo("Daily tables created and uploaded successfully.\n");
-    }else{
-        echo "no daily tables";
+    } else {
+        echo "cdr_sms CSV file generated and uploaded successfully.\n";
+        Logging::logInfo("cdr_sms CSV file generated and uploaded successfully.\n");
     }
-    
-
 } catch (Exception $e) {
     echo "Error: " . $e->getMessage() . "\n";
     Logging::logError("Error in CSV generation : " . $e->getMessage());
     exit(1);
 }
-
-
-
