@@ -185,23 +185,6 @@ trait ValidDataGeneratorTrait
         return $reference;
     }
 
-    /**
-     * Generates a date range with start and end timestamps for the given dates.
-     *
-     * @param string $startDate The start date in 'YYYY-MM-DD' format.
-     * @param string $endDate The end date in 'YYYY-MM-DD' format.
-     * 
-     * @return array An associative array with 'start' and 'end' keys, containing the start and end timestamps.
-     */
-    public function generateDateRange(string $startDate, string $endDate): array
-    {
-        return [
-            'start' => $startDate . ' 00:00:00',
-            'end' => $endDate . ' 23:59:59'
-        ];
-    }
-
-
 
     /**
      * Truncates the specified table in the database.
@@ -334,6 +317,40 @@ trait ValidDataGeneratorTrait
     }
 
     /**
+     * Generates a date range with start and end timestamps for the given dates.
+     *
+     * @param string $startDate The start date in 'YYYY-MM-DD' format.
+     * @param string $endDate The end date in 'YYYY-MM-DD' format.
+     * 
+     * @return array An associative array with 'start' and 'end' keys, containing the start and end timestamps.
+     */
+
+
+     public function generateDateRange(string $startDate, string $endDate): array
+     {
+         $start = new DateTime($startDate);
+         $end = new DateTime($endDate);
+         $now = new DateTime(); 
+     
+         if ($end->format('Y-m-d') === $now->format('Y-m-d')) {
+             $end = $now; 
+         } elseif ($end > $now) {
+             throw new InvalidArgumentException('Error: The end date cannot be in the future.');
+         }
+     
+         if ($start > $end) {
+             throw new InvalidArgumentException('Error: The start date must be before or equal to the end date.');
+         }
+     
+         return [
+             'start' => $start->format('Y-m-d') . ' 00:00:00',
+             'end' => $end->format('Y-m-d H:i:s') 
+         ];
+     }
+     
+
+
+    /**
      * Generates an array of sequential timestamps between the specified start and end dates.
      *
      * @param string $startDate The start date in 'Y-m-d H:i:s' format.
@@ -393,7 +410,7 @@ trait ValidDataGeneratorTrait
         $remaining = $totalCount;
 
         for ($i = 0; $i < $days - 1; $i++) {
-            $randomCount = rand(1, (int)($remaining / ($days - $i)) * 2); 
+            $randomCount = rand(1, (int)($remaining / ($days - $i)) * 2);
             $distribution[] = $randomCount;
             $remaining -= $randomCount;
         }
