@@ -194,7 +194,7 @@ trait ValidDataGeneratorTrait
      */
     public function truncateTable(string $tableName): void
     {
-        $this->pdo->query("TRUNCATE TABLE $tableName");
+        $this->pdoReporting->query("TRUNCATE TABLE $tableName");
     }
 
     /**
@@ -212,7 +212,7 @@ trait ValidDataGeneratorTrait
 
         $query = "INSERT INTO {$tableName} ({$fields}) VALUES ({$placeholders})";
 
-        $stmt = $this->pdo->prepare($query);
+        $stmt = $this->pdoReporting->prepare($query);
 
         foreach ($dataBatch as $data) {
             foreach ($data as $key => $value) {

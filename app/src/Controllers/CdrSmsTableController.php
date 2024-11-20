@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../../vendor/autoload.php';
 require_once __DIR__ . '/../../../config/SmppMappingArrays.php';
 
 use app\src\Models\DbConnectionReporting;
+use app\src\Models\DbConnection;
 use Faker\Factory as Faker;
 use config\SmppMappingArrays;
 use app\src\Traits\ValidDataGeneratorTrait;
@@ -22,20 +23,21 @@ class CdrSmsTableController
 {
     private $faker;
     public $nodeIds = [];
-    private $pdo;
     private $smppMapping = [];
     private $systemId;
-
+    private $failureRate;
+    private $pdoReporting;
+    private $pdoMain;
 
     use ValidDataGeneratorTrait;
 
     public function __construct()
     {
         $dbConnection = DbConnectionReporting::getInstance();
-        $this->pdo = $dbConnection->getConnection();
+        $this->pdoReporting = $dbConnection->getConnection();
 
-        // $dbConnectionSMPP = DbConnectionSMPP::getInstance();
-        // $this->pdo = $dbConnectionSMPP->getConnection();
+        $dbConnectionMain = DbConnection::getInstance();
+        $this->pdoMain = $dbConnectionMain->getConnection();
 
         $this->faker = Faker::create();
     }
@@ -138,7 +140,7 @@ class CdrSmsTableController
      * @param array $commonValues An associative array containing common values for the SRI fields.
      * @return array An associative array containing the generated SRI fields.
      */
-    private function generateSRIFields(array $commonValue): array
+    private function generateSRIFields(array $commonSMSMTValue): array
     {
         try {
             // Generate and return a single SRI record
@@ -146,15 +148,15 @@ class CdrSmsTableController
 
             return [
                 'id' => $id,
-                'created_at' => $commonValue['sri_created_at'],
+                'created_at' => $commonSMSMTValue['sri_created_at'],
                 'protocol' => 'ss7',
                 'type' => 'sri',
-                'reference' => $commonValue['reference'],
-                'sri_time' => $commonValue['sri_created_at'],
-                'sri_calling_gt' => $commonValue['smscGt'],
-                'sri_map_gt' => $commonValue['smscGt'],
-                'imsi' => $commonValue['imsi'],
-                'virtual_imsi' => $commonValue['virtual_imsi'],
+                'reference' => $commonSMSMTValue['reference'],
+                'sri_time' => $commonSMSMTValue['sri_created_at'],
+                'sri_calling_gt' => $commonSMSMTValue['smscGt'],
+                'sri_map_gt' => $commonSMSMTValue['smscGt'],
+                'imsi' => $commonSMSMTValue['imsi'],
+                'virtual_imsi' => $commonSMSMTValue['virtual_imsi'],
                 'virtual_vlr_gt' => "\N",
                 'fwdsm_time' => "\N",
                 'fwdsm_calling_gt' => "\N",
@@ -168,20 +170,20 @@ class CdrSmsTableController
                 'dlr_time' => "\N",
                 'dlr_status' => "\N",
                 'oa' => "\N",
-                'da' => $commonValue['da'],
+                'da' => $commonSMSMTValue['da'],
                 'dcs' => "\N",
                 'pid' => "\N",
                 'tpdu_length' => "\N",
                 'sar_ref' => "\N",
                 'msg_part' => "\N",
                 'msg_parts' => "\N",
-                'status' => 'success',
-                'error_major' => "\N",
-                'error_minor' => "\N",
-                'error_description' => "\N",
+                'status' => $commonSMSMTValue['status'],
+                'error_major' => $commonSMSMTValue['error_major'],
+                'error_minor' => $commonSMSMTValue['error_minor'],
+                'error_description' => $commonSMSMTValue['error_description'],
                 'content' => "\N",
-                'rule_id' => "\N",
-                'action_id' => 0,
+                'rule_id' => $commonSMSMTValue['rule_id'],
+                'action_id' => $commonSMSMTValue['action_id'],
                 'node_id' => $this->faker->randomElement($this->nodeIds),
                 'traffic_type' => "\N"
             ];
@@ -197,15 +199,15 @@ class CdrSmsTableController
      * @param array $commonValues Common values shared between SRI and SMSMT records.
      * @return array An array of associative arrays, each representing an SMSMT record. 
      */
-    private function generateSMSMTFields(array $commonValue): array
+    private function generateSMSMTFields(array $commonSMSMTValue): array
     {
         try {
             $smsmtRecords = [];
-            $trafficType = (substr($commonValue['smscGt'], 0, 2) === '94') ? 'local' : 'international';
+            $trafficType = (substr($commonSMSMTValue['smscGt'], 0, 2) === '94') ? 'local' : 'international';
 
-            $smsmtCreatedAt = is_string($commonValue['sri_created_at'])
-                ? new \DateTime($commonValue['sri_created_at'])
-                : $commonValue['sri_created_at'];
+            $smsmtCreatedAt = is_string($commonSMSMTValue['sri_created_at'])
+                ? new \DateTime($commonSMSMTValue['sri_created_at'])
+                : $commonSMSMTValue['sri_created_at'];
 
             $smsmtCreatedAt = clone $smsmtCreatedAt;
             $randomSeconds = rand(0, 2);
@@ -229,16 +231,16 @@ class CdrSmsTableController
                     'created_at' => $smsmtCreatedAt->format('Y-m-d H:i:s'),
                     'protocol' => 'ss7',
                     'type' => 'smsmt',
-                    'reference' => $commonValue['reference'],
+                    'reference' => $commonSMSMTValue['reference'],
                     'sri_time' => "\N",
                     'sri_calling_gt' => "\N",
                     'sri_map_gt' => "\N",
-                    'imsi' => $commonValue['imsi'],
-                    'virtual_imsi' => $commonValue['virtual_imsi'],
+                    'imsi' => $commonSMSMTValue['imsi'],
+                    'virtual_imsi' => $commonSMSMTValue['virtual_imsi'],
                     'virtual_vlr_gt' => $smsfwGt,
                     'fwdsm_time' => $smsmtCreatedAt->format('Y-m-d H:i:s'),
-                    'fwdsm_calling_gt' => $commonValue['smscGt'],
-                    'fwdsm_map_gt' => $commonValue['smscGt'],
+                    'fwdsm_calling_gt' => $commonSMSMTValue['smscGt'],
+                    'fwdsm_map_gt' => $commonSMSMTValue['smscGt'],
                     'esme_ip' => "\N",
                     'esme_port' => "\N",
                     'smsc_ip' => "\N",
@@ -247,21 +249,21 @@ class CdrSmsTableController
                     'message_id' => "\N",
                     'dlr_time' => "\N",
                     'dlr_status' => "\N",
-                    'oa' => $commonValue['oa'],
-                    'da' => $commonValue['da'],
+                    'oa' => $commonSMSMTValue['oa'],
+                    'da' => $commonSMSMTValue['da'],
                     'dcs' => $dcs,
                     'pid' => $pid,
                     'tpdu_length' => $contentData['tpdu_length'],
                     'sar_ref' => $sar_ref,
                     'msg_part' => $contentData['msg_part'],
                     'msg_parts' => $contentData['msg_parts'],
-                    'status' => 'success',
-                    'error_major' => "\N",
-                    'error_minor' => "\N",
+                    'status' => $commonSMSMTValue['status_fwdsm'],
+                    'error_major' => $commonSMSMTValue['error_major'],
+                    'error_minor' => $commonSMSMTValue['error_minor'],
                     'error_description' => "\N",
                     'content' => $contentData['content'],
-                    'rule_id' => "\N",
-                    'action_id' => 0,
+                    'rule_id' => $commonSMSMTValue['rule_id_fwdsm'],
+                    'action_id' => $commonSMSMTValue['action_id_fwdsm'],
                     'node_id' => $this->faker->randomElement($this->nodeIds),
                     'traffic_type' => $trafficType
                 ];
@@ -285,38 +287,148 @@ class CdrSmsTableController
      * @return array An associative array containing common values for SMSMT records. 
      */
 
+
     public function generateCommonSMSMTValues(string $trafficType, string $startDate, string $endDate, int $numSriSmsmtPairs): array
     {
         try {
-            $commonSMSMTValues = [];
+            $commonSMSMTValue = [];
             $lastUsedTimestamps = [];
+            $failureRules = [];
+            $whitelistRules = [];
 
-            // Generate random timestamps, sort them to ensure they are sequential
+            $actions = [
+                -2 => 'Do Not Reply',
+                -1 => 'Fake Delivery',
+                // 0 => 'proper',
+                1  => 'Unknown Number(1)',
+                9  => 'Illegal Subscriber(9)',
+                27 => 'Absent Subscriber(27)'
+            ];
+
+            $legacyQuery = "SELECT * FROM legacy_rules WHERE type = 'mt'";
+            $legacyStmt = $this->pdoMain->prepare($legacyQuery);
+            $legacyStmt->execute();
+            $legacyRules = $legacyStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            if (empty($legacyRules)) {
+                throw new Exception("No legacy rules found in the database.");
+            }
+
+            // ---------------------------------------------------------------------------------------------------
+
+            // Load legacy whitelist
+            $whitelistQuery = "SELECT * FROM legacy_whitelists";
+            $whitelistStmt = $this->pdoMain->prepare($whitelistQuery);
+            $whitelistStmt->execute();
+            $whitelistRules = $whitelistStmt->fetchAll(PDO::FETCH_ASSOC);
+
+
+            // Filter legacy rules by excluding those that overlap with the whitelist
+            $filteredRules = array_filter($legacyRules, function ($rule) use ($whitelistRules) {
+                foreach ($whitelistRules as $whitelist) {
+                    if (
+                        $rule['calling_gt'] === $whitelist['calling_gt'] &&
+                        $rule['map_gt'] === $whitelist['map_gt'] &&
+                        $rule['oa'] === $whitelist['oa'] &&
+                        $rule['da'] === $whitelist['da'] &&
+                        $rule['content'] === $whitelist['content']
+                    ) {
+                        return false; 
+                    }
+                }
+                return true; // Keep this rule
+            });
+
+            foreach ($filteredRules as $rule) {
+                $failureRules[] = [
+                    'id' => $rule['id'],
+                    'calling_gt' => $rule['calling_gt'],
+                    'map_gt' => $rule['map_gt'],
+                    'oa' => $rule['oa'],
+                    'da' => $rule['da'],
+                    'content' => $rule['content'],
+                    'action_id' => $rule['action_id']
+                ];
+            }
+
+            $failureRate = (int) $_ENV['FAILURE_RATE'];
+            if ($failureRate < 0 || $failureRate > 100) {
+                throw new Exception("FAILURE_RATE should be between 0 and 100.");
+            }
+
+            foreach ($whitelistRules as $whitelistedRule) {
+                $whitelistedRules[] = [
+                    'id' => $whitelistedRule['id'],
+                    'calling_gt' => $whitelistedRule['calling_gt'],
+                    'map_gt' => $whitelistedRule['map_gt'],
+                    'oa' => $whitelistedRule['oa'],
+                    'da' => $whitelistedRule['da'],
+                    'content' => $whitelistedRule['content']
+
+                ];
+            }
+
             $timestamps = $this->generateRandomTimestamps($startDate, $endDate, $numSriSmsmtPairs);
-            sort($timestamps);
+            //  sort($timestamps);
 
             foreach ($timestamps as $sriCreatedAt) {
                 if (is_string($sriCreatedAt)) {
                     $sriCreatedAt = new \DateTime($sriCreatedAt);
                 }
 
-                // Generate Originating Address (OA)
+                $selectedRule = $this->faker->randomElement($failureRules);
+
+                $isWhitelist = $this->faker->boolean(30); // Adjust the percentage as needed
+
+                $selectedRule = $isWhitelist
+                    ? $this->faker->randomElement($whitelistedRules)
+                    : $this->faker->randomElement($failureRules);
+
+                $ruleId = $selectedRule['id'];
+                $callingGt = $selectedRule['calling_gt'];
+                $actionId = $isWhitelist ? 0 : $selectedRule['action_id'];
+                $da = $selectedRule['da'] ;
+                $oa = $selectedRule['oa'];
+
+                // $status = $isWhitelist ? 'success' : ($this->faker->boolean($failureRate) ? 'failed' : 'success');
+                if ($isWhitelist) {
+                    $status = 'success';
+                    $statusFwdsm = 'success';
+                } else {
+                    $status = $this->faker->boolean($failureRate) ? 'failed' : 'success';
+                    $statusFwdsm = $this->faker->boolean($failureRate) ? 'failed' : 'success';
+                }              
+
+                $isFailed = $status==='failed';
+                // $status = $isFailed ? 'failed' : 'success';
+
+                $isFwdsmFailed = $this->faker->boolean($failureRate);
+                // $statusFwdsm = $isWhitelist ? 'success' : ($isFwdsmFailed ? 'failed' : 'success');
+
                 $useName = $this->faker->boolean($_ENV['OA_NAMES_PERCENTAGE']);
-                $oa = $useName ? $this->faker->randomElement(explode(',', $_ENV['OA_NAMES'])) : $this->generateMSISDN($trafficType);
+                $oaSuccess = $useName ? $this->faker->randomElement(explode(',', $_ENV['OA_NAMES'])) : $this->generateMSISDN($trafficType);
 
                 $oaNames = explode(',', $_ENV['OA_NAMES']);
                 $oaType = (substr($oa, 0, 2) === '94' || in_array($oa, $oaNames)) ? 'local' : 'international';
 
-                // Generate Destination Address (DA)
-                $da = $this->generateMSISDN('local_onnet');
+                $daSuccess = $this->generateMSISDN('local_onnet');
 
-                $smscGt = $oaType === 'local'
+                $fwdsmDa = $da === '%' ? $daSuccess : $da;
+                $fwdsmOa = $oa === '%' ? $oaSuccess : $oa;
+
+                $smscGtDefault = $oaType === 'local'
                     ? $this->faker->randomElement(explode(',', $_ENV['OLO_SMSC_GT']))
                     : $this->faker->randomElement(explode(',', $_ENV['INTL_SMSC_GT']));
 
+                $smscGtWhitelist = $callingGt === '%' ? $smscGtDefault : $callingGt;
+                $smscGtSuccess = $isWhitelist ? $smscGtWhitelist : $smscGtDefault;
+                $smscGtFailed = $callingGt === '%' ? $smscGtDefault : $callingGt;
+
+                $smscGt = $isFailed ? $smscGtFailed : $smscGtSuccess;
+
                 $virtualImsi = $this->generateVirtualIMSI();
 
-                // Ensure a 30-minute gap between timestamps
+                // Ensure a 30-minute gap between timestamps for each virtual IMSI
                 if (isset($lastUsedTimestamps[$virtualImsi])) {
                     $lastUsedTimestamp = $lastUsedTimestamps[$virtualImsi];
                     if (is_string($lastUsedTimestamp)) {
@@ -328,26 +440,49 @@ class CdrSmsTableController
                         $sriCreatedAt = $updatedTimestamp;
                     }
                 }
-
                 $lastUsedTimestamps[$virtualImsi] = $sriCreatedAt;
 
-                $commonSMSMTValues[] = [
+                $randNumErrors = $this->faker->numberBetween(0, 100);
+
+                // Set failure details if the record is marked as failed
+                $action_id = $isFailed ? $actionId : "\N";
+                $rule_id = $isFailed ? $ruleId : 0;
+                $errorMajor = $isFailed ? $randNumErrors : "\N";
+                $errorMinor = $isFailed ? $randNumErrors : "\N";
+                $errorDescription = $isFailed ? $actions[$action_id] : "\N";
+
+                $fwdsmActionId = $isFwdsmFailed ? $actionId : "\N";
+                $fwdsmRuleId = $isFwdsmFailed ? $ruleId : 0;
+
+
+                // Generate the SRI record
+                $commonSMSMTValue[] = [
                     'reference' => $this->generateReference($sriCreatedAt),
                     'imsi' => $this->generateIMSI($da),
                     'virtual_imsi' => $virtualImsi,
-                    'da' => $da,
-                    'oa' => $oa,
+                    'da' => $isFwdsmFailed || $isWhitelist ? $fwdsmDa : $daSuccess,
+                    'oa' => $isFwdsmFailed || $isWhitelist ? $fwdsmOa : $oaSuccess,
                     'smscGt' => $smscGt,
                     'sri_created_at' => $sriCreatedAt->format('Y-m-d H:i:s'),
+                    'status' => $status,
+                    'rule_id' => $rule_id,
+                    'action_id' => $action_id,
+                    'rule_id_fwdsm' => $fwdsmRuleId,
+                    'action_id_fwdsm' => $fwdsmActionId,
+                    'error_major' => $errorMajor,
+                    'error_minor' => $errorMinor,
+                    'error_description' => $errorDescription,
+                    'status_fwdsm' => $statusFwdsm
                 ];
             }
 
-            return $commonSMSMTValues;
+            return $commonSMSMTValue;
         } catch (Exception $e) {
             Logging::logError('Error generating common SMS MT values: ' . $e->getMessage());
             throw new Exception('Error generating common SMS MT values: ' . $e->getMessage());
         }
     }
+
     /**
      * Generate SMPP fields for SMS records within a specified date range.
      *
@@ -498,7 +633,7 @@ class CdrSmsTableController
         }
     }
 
-     /**
+    /**
      * Generates a specified number of SMSMO records and writes them to the CSV file.
      *
      * @param int $numRecords The number of SMSMO records to generate.
@@ -525,19 +660,25 @@ class CdrSmsTableController
      */
     public function generateSRISMSMTRecords($trafficType, string $startDate, string $endDate, $numSriSmsmtPairs, $csvFile)
     {
-
         // Generate common values used for both SRI and SMSMT
         $commonValues = $this->generateCommonSMSMTValues($trafficType, $startDate, $endDate, $numSriSmsmtPairs);
 
-        foreach ($commonValues as $commonValue) {
+        foreach ($commonValues as $commonSMSMTValue) {
+
             // Generate and write the SRI record
-            $sriRecord = $this->generateSRIFields($commonValue);
+            $sriRecord = $this->generateSRIFields($commonSMSMTValue);
             fputcsv($csvFile, $sriRecord);
 
-            // Generate and write the related SMSMT records
-            $smsmtRecords = $this->generateSMSMTFields($commonValue);
-            foreach ($smsmtRecords as $smsmtRecord) {
-                fputcsv($csvFile, $smsmtRecord);
+
+            // Check if the status of the SRI record is 'failed'
+            $isFailed = $commonSMSMTValue['status'] === 'failed';
+
+            // If the SRI record is not failed, generate and write the related SMSMT records
+            if (!$isFailed) {
+                $smsmtRecords = $this->generateSMSMTFields($commonSMSMTValue);
+                foreach ($smsmtRecords as $smsmtRecord) {
+                    fputcsv($csvFile, $smsmtRecord);
+                }
             }
         }
     }
@@ -579,7 +720,7 @@ class CdrSmsTableController
         ({$header})
         ";
 
-            $stmt = $this->pdo->prepare($importQuery);
+            $stmt = $this->pdoReporting->prepare($importQuery);
             $stmt->execute();
 
             Logging::logInfo("CSV file uploaded to {$tableName} table successfully.");
@@ -593,7 +734,7 @@ class CdrSmsTableController
     {
         try {
             $createTableSQL = "CREATE TABLE IF NOT EXISTS {$tableName} LIKE cdr_sms";
-            $stmt = $this->pdo->prepare($createTableSQL);
+            $stmt = $this->pdoReporting->prepare($createTableSQL);
             $stmt->execute();
 
             Logging::logInfo("Table {$tableName} created.");
@@ -648,14 +789,14 @@ class CdrSmsTableController
                 'node_id',
                 'traffic_type'
             ];
-    
+
             if ($isDailyTable) {
                 $currentDate = new \DateTime($startDate);
-                $endDateObject = new \DateTime($endDate); 
+                $endDateObject = new \DateTime($endDate);
                 $daysDiff = $endDateObject->diff($currentDate)->days + 1;
                 $dailyCounts = $this->distributeRowCountRandomly($rowCount, $daysDiff);
                 $dayIndex = 0;
-    
+
                 // Loop for each day in the range
                 while ($currentDate <= $endDateObject) {
                     $dateString = $currentDate->format('Ymd');
@@ -663,46 +804,46 @@ class CdrSmsTableController
                     // Set startDate and endDate for each daily table
                     $currentStartDate = $dateString;
                     $currentEndDate = $dateString;
-    
-                    $fileName = "cdr_sms_{$dateString}_".uniqid().".csv";
+
+                    $fileName = "cdr_sms_{$dateString}_" . uniqid() . ".csv";
                     $filePath = $_ENV['FILE_PATH'] . "/{$fileName}";
                     $csvFile = fopen($filePath, 'w');
                     if ($csvFile === false) {
                         throw new Exception('Failed to open file for writing.');
                     }
-    
+
                     fputcsv($csvFile, $header);
                     $numRecords = $dailyCounts[$dayIndex];
                     $dayIndex++;
-    
+
                     // Calculate record distribution
                     $numSMSMO = round($numRecords * ($_ENV['SMSMO'] / 100));
                     $numSriSmsmtPairs = round($numRecords * ($_ENV['SRI_SMSMT'] / 100));
                     $numSMPP = round($numRecords * ($_ENV['SMPP'] / 100));
-    
+
                     $numSmsmoOnnet = round($numSMSMO * ($_ENV['SMSMO_LOCAL_ONNET'] / 100));
                     $numSmsmoOlo = round($numSMSMO * ($_ENV['SMSMO_LOCAL_OLO'] / 100));
                     $numSmsmoIntl = round($numSMSMO * ($_ENV['SMSMO_INTERNATIONAL'] / 100));
-    
+
                     $numSmsmtOlo = round($numSriSmsmtPairs * ($_ENV['SRI_SMSMT_LOCAL_OLO'] / 100));
                     $numSmsmtIntl = round($numSriSmsmtPairs * ($_ENV['SRI_SMSMT_INTERNATIONAL'] / 100));
-    
+
                     $numSmppLocal = round($numSMPP * ($_ENV['SMPP_LOCAL'] / 100));
                     $numSmppIntl = round($numSMPP * ($_ENV['SMPP_INTERNATIONAL'] / 100));
-    
+
                     // Generate records for each traffic type
                     $this->generateSMSMORecords($numSmsmoOnnet, 'local_onnet', $currentStartDate, $currentEndDate, $csvFile);
                     $this->generateSMSMORecords($numSmsmoOlo, 'local_olo', $currentStartDate, $currentEndDate, $csvFile);
                     $this->generateSMSMORecords($numSmsmoIntl, 'international', $currentStartDate, $currentEndDate, $csvFile);
-    
+
                     $this->generateSRISMSMTRecords('local_olo', $currentStartDate, $currentEndDate, $numSmsmtOlo, $csvFile);
                     $this->generateSRISMSMTRecords('international', $currentStartDate, $currentEndDate, $numSmsmtIntl, $csvFile);
-    
+
                     $this->generateSMPPRecords($numSmppLocal, 'local', $currentStartDate, $currentEndDate, $csvFile);
                     $this->generateSMPPRecords($numSmppIntl, 'international', $currentStartDate, $currentEndDate, $csvFile);
-    
+
                     fclose($csvFile);
-    
+
                     // Create daily table and upload CSV
                     $this->createDailyTable("cdr_sms_{$dateString}");
                     $this->uploadCSV($filePath, implode(',', $header), "cdr_sms_{$dateString}");
@@ -712,7 +853,6 @@ class CdrSmsTableController
                     // Move to the next day
                     $currentDate->modify('+1 day');
                 }
-    
             } else {
                 // Generate cdr_sms table
                 $fileName = "cdr_sms_" . uniqid() . '.csv';
@@ -721,43 +861,43 @@ class CdrSmsTableController
                 if ($csvFile === false) {
                     throw new Exception('Failed to open file for writing.');
                 }
-    
+
                 fputcsv($csvFile, $header);
-    
+
                 // Calculate record distribution
                 $numSMSMO = round($rowCount * ($_ENV['SMSMO'] / 100));
                 $numSriSmsmtPairs = round($rowCount * ($_ENV['SRI_SMSMT'] / 100));
                 $numSMPP = round($rowCount * ($_ENV['SMPP'] / 100));
-    
+
                 $numSmsmoOnnet = round($numSMSMO * ($_ENV['SMSMO_LOCAL_ONNET'] / 100));
                 $numSmsmoOlo = round($numSMSMO * ($_ENV['SMSMO_LOCAL_OLO'] / 100));
                 $numSmsmoIntl = round($numSMSMO * ($_ENV['SMSMO_INTERNATIONAL'] / 100));
-    
+
                 $numSmsmtOlo = round($numSriSmsmtPairs * ($_ENV['SRI_SMSMT_LOCAL_OLO'] / 100));
                 $numSmsmtIntl = round($numSriSmsmtPairs * ($_ENV['SRI_SMSMT_INTERNATIONAL'] / 100));
-    
+
                 $numSmppLocal = round($numSMPP * ($_ENV['SMPP_LOCAL'] / 100));
                 $numSmppIntl = round($numSMPP * ($_ENV['SMPP_INTERNATIONAL'] / 100));
-    
+
                 // Generate records for the entire range
                 $this->generateSMSMORecords($numSmsmoOnnet, 'local_onnet', $startDate, $endDate, $csvFile);
                 $this->generateSMSMORecords($numSmsmoOlo, 'local_olo', $startDate, $endDate, $csvFile);
                 $this->generateSMSMORecords($numSmsmoIntl, 'international', $startDate, $endDate, $csvFile);
-    
+
                 $this->generateSRISMSMTRecords('local_olo', $startDate, $endDate, $numSmsmtOlo, $csvFile);
                 $this->generateSRISMSMTRecords('international', $startDate, $endDate, $numSmsmtIntl, $csvFile);
-    
+
                 $this->generateSMPPRecords($numSmppLocal, 'local', $startDate, $endDate, $csvFile);
                 $this->generateSMPPRecords($numSmppIntl, 'international', $startDate, $endDate, $csvFile);
-    
+
                 fclose($csvFile);
                 $this->uploadCSV($filePath, implode(',', $header), 'cdr_sms');
                 Logging::logInfo("CSV file generated at: {$filePath}");
-                echo"CSV file generated at: {$filePath}";
+                echo "CSV file generated at: {$filePath}";
             }
         } catch (Exception $e) {
             Logging::logError('Error generating records: ' . $e->getMessage());
             throw new Exception('Error generating records: ' . $e->getMessage());
         }
     }
-}    
+}
