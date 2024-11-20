@@ -286,44 +286,125 @@ class CdrSmsTableController
      *
      * @return array An associative array containing common values for SMSMT records. 
      */
+    public function generateCommonSMSMTValues(
+        string $trafficType,
+        string $startDate,
+        string $endDate,
+        int $numSriSmsmtPairs
+    ): array {
+        try {
+            $commonSMSMTValues = [];
+            $lastUsedTimestamps = [];
+    
+            // Generate random timestamps, sort them to ensure they are sequential
+            $timestamps = $this->generateRandomTimestamps($startDate, $endDate, $numSriSmsmtPairs);
+            sort($timestamps);
+    
+            foreach ($timestamps as $index => $sriCreatedAt) {
+                if (is_string($sriCreatedAt)) {
+                    $sriCreatedAt = new \DateTime($sriCreatedAt);
+                }
 
-
-    public function generateCommonSMSMTValues(string $trafficType, string $startDate, string $endDate, int $numSriSmsmtPairs): array
+                $failedSRIRecords = $this->generateFailedSRIRecords();
+                $smsmtRecords = $this->generateFailedandWhitelistedSMSMTRecords();
+    
+                // Ensure we have corresponding failed SRI and SMSMT data
+                $sriData = $failedSRIRecords[$index % count($failedSRIRecords)];
+                $smsmtData = $smsmtRecords[$index % count($smsmtRecords)];
+    
+                // Generate OA
+                $useName = $this->faker->boolean($_ENV['OA_NAMES_PERCENTAGE']);
+                $oa = $useName ? $this->faker->randomElement(explode(',', $_ENV['OA_NAMES'])) : $this->generateMSISDN($trafficType);
+    
+                $oaNames = explode(',', $_ENV['OA_NAMES']);
+                $oaType = (substr($oa, 0, 2) === '94' || in_array($oa, $oaNames)) ? 'local' : 'international';
+    
+                // Generate DA
+                $da = $this->generateMSISDN('local_onnet');
+    
+                $smscGt = $oaType === 'local'
+                    ? $this->faker->randomElement(explode(',', $_ENV['OLO_SMSC_GT']))
+                    : $this->faker->randomElement(explode(',', $_ENV['INTL_SMSC_GT']));
+    
+                $virtualImsi = $this->generateVirtualIMSI();
+    
+                // Ensure a 30-minute gap between timestamps
+                if (isset($lastUsedTimestamps[$virtualImsi])) {
+                    $lastUsedTimestamp = $lastUsedTimestamps[$virtualImsi];
+                    if (is_string($lastUsedTimestamp)) {
+                        $lastUsedTimestamp = new \DateTime($lastUsedTimestamp);
+                    }
+    
+                    $updatedTimestamp = (clone $lastUsedTimestamp)->modify('+30 minutes');
+                    if ($sriCreatedAt < $updatedTimestamp) {
+                        $sriCreatedAt = $updatedTimestamp;
+                    }
+                }
+    
+                $lastUsedTimestamps[$virtualImsi] = $sriCreatedAt;
+    
+                // Add SRI and SMSMT records into the output
+                $commonSMSMTValues[] = [
+                    'sri_record' => [
+                        'imsi' => $sriData['imsi'],
+                        'da' => $sriData['da'],
+                        'oa' => $sriData['oa'],
+                        'calling_gt' => $sriData['calling_gt'],
+                        'status' => $sriData['status'],
+                        'error_major' => $sriData['error_major'],
+                        'error_minor' => $sriData['error_minor'],
+                        'error_description' => $sriData['error_description'],
+                        'sri_created_at' => $sriCreatedAt->format('Y-m-d H:i:s'),
+                    ],
+                    'smsmt_record' => [
+                        'reference' => $this->generateReference($sriCreatedAt),
+                        'imsi' => $smsmtData['imsi'],
+                        'virtual_imsi' => $virtualImsi,
+                        'da' => $smsmtData['da'],
+                        'oa' => $smsmtData['oa'],
+                        'smscGt' => $smscGt,
+                        'status' => $smsmtData['status'],
+                        'error_major' => $smsmtData['error_major'],
+                        'error_minor' => $smsmtData['error_minor'],
+                        'error_description' => $smsmtData['error_description'],
+                        'smsmt_created_at' => $sriCreatedAt->modify('+1 second')->format('Y-m-d H:i:s'),
+                    ],
+                ];
+                var_dump($commonSMSMTValues);
+                exit();
+            }
+    
+            return $commonSMSMTValues;
+        } catch (Exception $e) {
+            Logging::logError('Error generating common SMS MT values: ' . $e->getMessage());
+            throw new Exception('Error generating common SMS MT values: ' . $e->getMessage());
+        }
+    }
+    
+    public function generateFailedSRIRecords(): array
     {
         try {
-            $commonSMSMTValue = [];
-            $lastUsedTimestamps = [];
+            $failedSRIRecords = [];
             $failureRules = [];
             $whitelistRules = [];
 
-            $actions = [
-                -2 => 'Do Not Reply',
-                -1 => 'Fake Delivery',
-                // 0 => 'proper',
-                1  => 'Unknown Number(1)',
-                9  => 'Illegal Subscriber(9)',
-                27 => 'Absent Subscriber(27)'
-            ];
-
-            $legacyQuery = "SELECT * FROM legacy_rules WHERE type = 'mt'";
-            $legacyStmt = $this->pdoMain->prepare($legacyQuery);
-            $legacyStmt->execute();
-            $legacyRules = $legacyStmt->fetchAll(PDO::FETCH_ASSOC);
+            // Fetch legacy rules for SRI type
+            $legacyRulesQuery = "SELECT * FROM legacy_rules WHERE type = 'sri'";
+            $legacyRulesStmt = $this->pdoMain->prepare($legacyRulesQuery);
+            $legacyRulesStmt->execute();
+            $legacyRules = $legacyRulesStmt->fetchAll(PDO::FETCH_ASSOC);
 
             if (empty($legacyRules)) {
-                throw new Exception("No legacy rules found in the database.");
+                throw new Exception("No legacy SRI rules found in the database.");
             }
 
-            // ---------------------------------------------------------------------------------------------------
-
-            // Load legacy whitelist
+            // Fetch legacy whitelist
             $whitelistQuery = "SELECT * FROM legacy_whitelists";
             $whitelistStmt = $this->pdoMain->prepare($whitelistQuery);
             $whitelistStmt->execute();
             $whitelistRules = $whitelistStmt->fetchAll(PDO::FETCH_ASSOC);
 
-
-            // Filter legacy rules by excluding those that overlap with the whitelist
+            // Filter SRI rules to exclude whitelisted records
             $filteredRules = array_filter($legacyRules, function ($rule) use ($whitelistRules) {
                 foreach ($whitelistRules as $whitelist) {
                     if (
@@ -333,10 +414,10 @@ class CdrSmsTableController
                         $rule['da'] === $whitelist['da'] &&
                         $rule['content'] === $whitelist['content']
                     ) {
-                        return false; 
+                        return false; // Exclude whitelisted rule
                     }
                 }
-                return true; // Keep this rule
+                return true; // Include rule if not whitelisted
             });
 
             foreach ($filteredRules as $rule) {
@@ -351,137 +432,142 @@ class CdrSmsTableController
                 ];
             }
 
-            $failureRate = (int) $_ENV['FAILURE_RATE'];
-            if ($failureRate < 0 || $failureRate > 100) {
-                throw new Exception("FAILURE_RATE should be between 0 and 100.");
-            }
+            // Randomly select a failure rule
+            $selectedRule = $this->faker->randomElement($failureRules);
 
-            foreach ($whitelistRules as $whitelistedRule) {
-                $whitelistedRules[] = [
-                    'id' => $whitelistedRule['id'],
-                    'calling_gt' => $whitelistedRule['calling_gt'],
-                    'map_gt' => $whitelistedRule['map_gt'],
-                    'oa' => $whitelistedRule['oa'],
-                    'da' => $whitelistedRule['da'],
-                    'content' => $whitelistedRule['content']
+            $ruleId = $selectedRule['id'];
+            $callingGt = $selectedRule['calling_gt'];
+            $actionId = $selectedRule['action_id'];
+            $da = $selectedRule['da'];
+            $oa = $selectedRule['oa'];
 
-                ];
-            }
+            // Generate error details
+            $randNumErrors = $this->faker->numberBetween(0, 100);
+            $errorMajor = $randNumErrors;
+            $errorMinor = $randNumErrors;
 
-            $timestamps = $this->generateRandomTimestamps($startDate, $endDate, $numSriSmsmtPairs);
-            //  sort($timestamps);
+            // Assign SRI record details
+            $failedSRIRecords[] = [
+                'imsi' => $this->generateIMSI($da),
+                'da' => $da,
+                'oa' => $oa,
+                'calling_gt' => $callingGt,
+                'status' => 'failed',
+                'rule_id' => $ruleId,
+                'action_id' => $actionId,
+                'error_major' => $errorMajor,
+                'error_minor' => $errorMinor,
+                'error_description' => "error description"
+            ];
 
-            foreach ($timestamps as $sriCreatedAt) {
-                if (is_string($sriCreatedAt)) {
-                    $sriCreatedAt = new \DateTime($sriCreatedAt);
-                }
-
-                $selectedRule = $this->faker->randomElement($failureRules);
-
-                $isWhitelist = $this->faker->boolean(30); // Adjust the percentage as needed
-
-                $selectedRule = $isWhitelist
-                    ? $this->faker->randomElement($whitelistedRules)
-                    : $this->faker->randomElement($failureRules);
-
-                $ruleId = $selectedRule['id'];
-                $callingGt = $selectedRule['calling_gt'];
-                $actionId = $isWhitelist ? 0 : $selectedRule['action_id'];
-                $da = $selectedRule['da'] ;
-                $oa = $selectedRule['oa'];
-
-                // $status = $isWhitelist ? 'success' : ($this->faker->boolean($failureRate) ? 'failed' : 'success');
-                if ($isWhitelist) {
-                    $status = 'success';
-                    $statusFwdsm = 'success';
-                } else {
-                    $status = $this->faker->boolean($failureRate) ? 'failed' : 'success';
-                    $statusFwdsm = $this->faker->boolean($failureRate) ? 'failed' : 'success';
-                }              
-
-                $isFailed = $status==='failed';
-                // $status = $isFailed ? 'failed' : 'success';
-
-                $isFwdsmFailed = $this->faker->boolean($failureRate);
-                // $statusFwdsm = $isWhitelist ? 'success' : ($isFwdsmFailed ? 'failed' : 'success');
-
-                $useName = $this->faker->boolean($_ENV['OA_NAMES_PERCENTAGE']);
-                $oaSuccess = $useName ? $this->faker->randomElement(explode(',', $_ENV['OA_NAMES'])) : $this->generateMSISDN($trafficType);
-
-                $oaNames = explode(',', $_ENV['OA_NAMES']);
-                $oaType = (substr($oa, 0, 2) === '94' || in_array($oa, $oaNames)) ? 'local' : 'international';
-
-                $daSuccess = $this->generateMSISDN('local_onnet');
-
-                $fwdsmDa = $da === '%' ? $daSuccess : $da;
-                $fwdsmOa = $oa === '%' ? $oaSuccess : $oa;
-
-                $smscGtDefault = $oaType === 'local'
-                    ? $this->faker->randomElement(explode(',', $_ENV['OLO_SMSC_GT']))
-                    : $this->faker->randomElement(explode(',', $_ENV['INTL_SMSC_GT']));
-
-                $smscGtWhitelist = $callingGt === '%' ? $smscGtDefault : $callingGt;
-                $smscGtSuccess = $isWhitelist ? $smscGtWhitelist : $smscGtDefault;
-                $smscGtFailed = $callingGt === '%' ? $smscGtDefault : $callingGt;
-
-                $smscGt = $isFailed ? $smscGtFailed : $smscGtSuccess;
-
-                $virtualImsi = $this->generateVirtualIMSI();
-
-                // Ensure a 30-minute gap between timestamps for each virtual IMSI
-                if (isset($lastUsedTimestamps[$virtualImsi])) {
-                    $lastUsedTimestamp = $lastUsedTimestamps[$virtualImsi];
-                    if (is_string($lastUsedTimestamp)) {
-                        $lastUsedTimestamp = new \DateTime($lastUsedTimestamp);
-                    }
-
-                    $updatedTimestamp = (clone $lastUsedTimestamp)->modify('+30 minutes');
-                    if ($sriCreatedAt < $updatedTimestamp) {
-                        $sriCreatedAt = $updatedTimestamp;
-                    }
-                }
-                $lastUsedTimestamps[$virtualImsi] = $sriCreatedAt;
-
-                $randNumErrors = $this->faker->numberBetween(0, 100);
-
-                // Set failure details if the record is marked as failed
-                $action_id = $isFailed ? $actionId : "\N";
-                $rule_id = $isFailed ? $ruleId : 0;
-                $errorMajor = $isFailed ? $randNumErrors : "\N";
-                $errorMinor = $isFailed ? $randNumErrors : "\N";
-                $errorDescription = $isFailed ? $actions[$action_id] : "\N";
-
-                $fwdsmActionId = $isFwdsmFailed ? $actionId : "\N";
-                $fwdsmRuleId = $isFwdsmFailed ? $ruleId : 0;
-
-
-                // Generate the SRI record
-                $commonSMSMTValue[] = [
-                    'reference' => $this->generateReference($sriCreatedAt),
-                    'imsi' => $this->generateIMSI($da),
-                    'virtual_imsi' => $virtualImsi,
-                    'da' => $isFwdsmFailed || $isWhitelist ? $fwdsmDa : $daSuccess,
-                    'oa' => $isFwdsmFailed || $isWhitelist ? $fwdsmOa : $oaSuccess,
-                    'smscGt' => $smscGt,
-                    'sri_created_at' => $sriCreatedAt->format('Y-m-d H:i:s'),
-                    'status' => $status,
-                    'rule_id' => $rule_id,
-                    'action_id' => $action_id,
-                    'rule_id_fwdsm' => $fwdsmRuleId,
-                    'action_id_fwdsm' => $fwdsmActionId,
-                    'error_major' => $errorMajor,
-                    'error_minor' => $errorMinor,
-                    'error_description' => $errorDescription,
-                    'status_fwdsm' => $statusFwdsm
-                ];
-            }
-
-            return $commonSMSMTValue;
+            return $failedSRIRecords;
         } catch (Exception $e) {
-            Logging::logError('Error generating common SMS MT values: ' . $e->getMessage());
-            throw new Exception('Error generating common SMS MT values: ' . $e->getMessage());
+            Logging::logError('Error generating failed SRI records: ' . $e->getMessage());
+            throw new Exception('Error generating failed SRI records: ' . $e->getMessage());
         }
     }
+
+
+    public function generateFailedandWhitelistedSMSMTRecords(): array
+    {
+        try {
+            $smsmtRecords = [];
+            $failedRules = [];
+            $whitelistRules = [];
+
+            // Fetch SMSMT rules from the legacy_rules table
+            $legacyRulesQuery = "SELECT * FROM legacy_rules WHERE type = 'mt'";
+            $legacyRulesStmt = $this->pdoMain->prepare($legacyRulesQuery);
+            $legacyRulesStmt->execute();
+            $legacyRules = $legacyRulesStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            if (empty($legacyRules)) {
+                throw new Exception("No legacy SMSMT rules found in the database.");
+            }
+
+            // Fetch whitelist rules from the legacy_whitelists table
+            $whitelistQuery = "SELECT * FROM legacy_whitelists";
+            $whitelistStmt = $this->pdoMain->prepare($whitelistQuery);
+            $whitelistStmt->execute();
+            $whitelistRules = $whitelistStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Filter SMSMT rules for failed and whitelisted categories
+            $filteredRules = array_filter($legacyRules, function ($rule) use ($whitelistRules) {
+                foreach ($whitelistRules as $whitelist) {
+                    if (
+                        $rule['calling_gt'] === $whitelist['calling_gt'] &&
+                        $rule['map_gt'] === $whitelist['map_gt'] &&
+                        $rule['oa'] === $whitelist['oa'] &&
+                        $rule['da'] === $whitelist['da'] &&
+                        $rule['content'] === $whitelist['content']
+                    ) {
+                        return false;
+                    }
+                }
+                return true; // Include rule if not whitelisted
+            });
+
+            foreach ($filteredRules as $rule) {
+                $failedRules[] = [
+                    'id' => $rule['id'],
+                    'calling_gt' => $rule['calling_gt'],
+                    'map_gt' => $rule['map_gt'],
+                    'oa' => $rule['oa'],
+                    'da' => $rule['da'],
+                    'content' => $rule['content'],
+                    'action_id' => $rule['action_id']
+                ];
+            }
+
+            foreach ($whitelistRules as $rule) {
+                $whitelistedRules[] = [
+                    'id' => $rule['id'],
+                    'calling_gt' => $rule['calling_gt'],
+                    'map_gt' => $rule['map_gt'],
+                    'oa' => $rule['oa'],
+                    'da' => $rule['da'],
+                    'content' => $rule['content']
+                ];
+            }
+
+            $isWhitelist = $this->faker->boolean(30);
+            $selectedRule = $isWhitelist
+                ? $this->faker->randomElement($whitelistedRules)
+                : $this->faker->randomElement($failedRules);
+
+            $status = $isWhitelist ? 'success' : 'failed';
+            $ruleId = $selectedRule['id'];
+            $callingGt = $selectedRule['calling_gt'];
+            $actionId = $isWhitelist ? "\N" : $selectedRule['action_id'];
+            $da = $selectedRule['da'];
+            $oa = $selectedRule['oa'];
+
+            $randNumErrors = $this->faker->numberBetween(0, 100);
+            $errorMajor = !$isWhitelist ? $randNumErrors : "\N";
+            $errorMinor = !$isWhitelist ? $randNumErrors : "\N";
+            $errorDescription = !$isWhitelist ? "error description" : "\N";
+
+            $smsmtRecords[] = [
+                'imsi' => $this->generateIMSI($da),
+                'da' => $da,
+                'oa' => $oa,
+                'calling_gt' => $callingGt,
+                'status' => $status,
+                'rule_id' => !$isWhitelist ? $ruleId : "\N",
+                'action_id' => $actionId,
+                'error_major' => $errorMajor,
+                'error_minor' => $errorMinor,
+                'error_description' => $errorDescription
+            ];
+
+            return $smsmtRecords;
+        } catch (Exception $e) {
+            Logging::logError('Error generating SMSMT records: ' . $e->getMessage());
+            throw new Exception('Error generating SMSMT records: ' . $e->getMessage());
+        }
+    }
+
+
 
     /**
      * Generate SMPP fields for SMS records within a specified date range.
