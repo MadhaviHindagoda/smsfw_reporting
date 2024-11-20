@@ -293,7 +293,7 @@ class CdrSmsTableController
         int $numSriSmsmtPairs
     ): array {
         try {
-            $commonSMSMTValues = [];
+            $commonSMSMTValue = [];
             $lastUsedTimestamps = [];
     
             // Generate random timestamps, sort them to ensure they are sequential
@@ -344,8 +344,8 @@ class CdrSmsTableController
                 $lastUsedTimestamps[$virtualImsi] = $sriCreatedAt;
     
                 // Add SRI and SMSMT records into the output
-                $commonSMSMTValues[] = [
-                    'sri_record' => [
+                $commonSMSMTValueSRI[] = [
+                    
                         'imsi' => $sriData['imsi'],
                         'da' => $sriData['da'],
                         'oa' => $sriData['oa'],
@@ -355,8 +355,8 @@ class CdrSmsTableController
                         'error_minor' => $sriData['error_minor'],
                         'error_description' => $sriData['error_description'],
                         'sri_created_at' => $sriCreatedAt->format('Y-m-d H:i:s'),
-                    ],
-                    'smsmt_record' => [
+                ];
+                    $commonSMSMTValueSMSMT = [
                         'reference' => $this->generateReference($sriCreatedAt),
                         'imsi' => $smsmtData['imsi'],
                         'virtual_imsi' => $virtualImsi,
@@ -368,13 +368,13 @@ class CdrSmsTableController
                         'error_minor' => $smsmtData['error_minor'],
                         'error_description' => $smsmtData['error_description'],
                         'smsmt_created_at' => $sriCreatedAt->modify('+1 second')->format('Y-m-d H:i:s'),
-                    ],
-                ];
-                var_dump($commonSMSMTValues);
-                exit();
+                    ];
+                
+                // var_dump($commonSMSMTValue);
+                $commonSMSMTValue = $commonSMSMTValueSRI||$commonSMSMTValueSMSMT;
             }
     
-            return $commonSMSMTValues;
+            return $commonSMSMTValue;
         } catch (Exception $e) {
             Logging::logError('Error generating common SMS MT values: ' . $e->getMessage());
             throw new Exception('Error generating common SMS MT values: ' . $e->getMessage());
