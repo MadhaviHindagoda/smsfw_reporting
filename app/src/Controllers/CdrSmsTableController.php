@@ -581,7 +581,7 @@ class CdrSmsTableController
                 $commonSMSMTValue[] = $record;
             }
 
-            return $smsmtRecords;
+            return $commonSMSMTValue;
         } catch (Exception $e) {
             Logging::logError('Error generating common values: ' . $e->getMessage());
             throw new Exception('Error generating common values: ' . $e->getMessage());
