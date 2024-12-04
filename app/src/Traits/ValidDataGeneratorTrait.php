@@ -259,7 +259,7 @@ trait ValidDataGeneratorTrait
 
         // Generate a long content text
         $longConLength = $partLength * $numParts * 2;
-        $longContent = $this->faker->text($longConLength);
+        $longContent = $this->faker->realtext($longConLength);
 
         for ($part = 1; $part <= $numParts; $part++) {
             if ($numParts === 1) {
@@ -326,28 +326,28 @@ trait ValidDataGeneratorTrait
      */
 
 
-     public function generateDateRange(string $startDate, string $endDate): array
-     {
-         $start = new DateTime($startDate);
-         $end = new DateTime($endDate);
-         $now = new DateTime(); 
-     
-         if ($end->format('Y-m-d') === $now->format('Y-m-d')) {
-             $end = $now; 
-         } elseif ($end > $now) {
-             throw new InvalidArgumentException('Error: The end date cannot be in the future.');
-         }
-     
-         if ($start > $end) {
-             throw new InvalidArgumentException('Error: The start date must be before or equal to the end date.');
-         }
-     
-         return [
-             'start' => $start->format('Y-m-d') . ' 00:00:00',
-             'end' => $end->format('Y-m-d H:i:s') 
-         ];
-     }
-     
+    public function generateDateRange(string $startDate, string $endDate): array
+    {
+        $start = new DateTime($startDate);
+        $end = new DateTime($endDate);
+        $now = new DateTime();
+
+        if ($end->format('Y-m-d') === $now->format('Y-m-d')) {
+            $end = $now;
+        } elseif ($end > $now) {
+            throw new InvalidArgumentException('Error: The end date cannot be in the future.');
+        }
+
+        if ($start > $end) {
+            throw new InvalidArgumentException('Error: The start date must be before or equal to the end date.');
+        }
+
+        return [
+            'start' => $start->format('Y-m-d') . ' 00:00:00',
+            'end' => $end->format('Y-m-d H:i:s')
+        ];
+    }
+
 
 
     /**
@@ -419,4 +419,58 @@ trait ValidDataGeneratorTrait
 
         return $distribution;
     }
+
+
+
+    private function getWeightedRandomType(array $weights): string
+    {
+        $totalWeight = array_sum($weights);
+        $random = mt_rand(1, $totalWeight); // Generate a random number within the weight range
+
+        foreach ($weights as $type => $weight) {
+            if ($random <= $weight) {
+                return $type;
+            }
+            $random -= $weight;
+        }
+
+        throw new Exception('Failed to determine weighted random type.');
+    }
+
+
+    function replaceMsisdnWithRandomNumbers($msisdn)
+    {
+        $numToReplace = $this->faker->randomElement([1, 2, 3]);
+
+        // Validate input
+        if (!is_numeric($msisdn) || $numToReplace < 1 || $numToReplace > 3) {
+            throw new InvalidArgumentException("Invalid MSISDN or number of digits to replace.");
+        }
+
+        $msisdnArray = str_split($msisdn);
+        $lastDigits = array_slice($msisdnArray, -7);
+
+        if ($numToReplace > count($lastDigits)) {
+            throw new InvalidArgumentException("Number of digits to replace exceeds the length of the MSISDN.");
+        }
+
+        // Pick random unique positions in the MSISDN to replace
+        $positions = array_rand($lastDigits, $numToReplace);
+        $positions = is_array($positions) ? $positions : [$positions];
+
+        // Replace digits with random numbers
+        foreach ($positions as $position) {
+            $lastDigits[$position] = rand(0, 9);
+        }
+
+        $msisdnArray = array_merge(
+            array_slice($msisdnArray, 0, -7), 
+            $lastDigits 
+        );
+
+        // Convert back to a string
+        return implode('', $msisdnArray);
+    }
+
+    
 }
