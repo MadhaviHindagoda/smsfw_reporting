@@ -221,7 +221,7 @@ class CdrSmsTableController
 
             $numParts = rand(1, 4);
             $isUnicode = (bool)rand(0, 1);
-            $messageContents = $this->generateSMSContent($numParts, $isUnicode);
+            $messageContents = $this->generateSMSContent($numParts, $isUnicode, $commonSMSMTValue['content'] ?? null);
 
             foreach ($messageContents as $contentData) {
                 $id = $this->generateAutoIncrementId();
@@ -474,7 +474,6 @@ class CdrSmsTableController
                         $sriActionId = 0;
                         $actionId = $selectedRule['action_id'];
 
-
                         break;
 
                     case 'sri':
@@ -521,20 +520,26 @@ class CdrSmsTableController
                 }
 
                 $callingGt = $selectedRule['calling_gt'];
+
                 $da = $selectedRule['da'];
                 $oa = $selectedRule['oa'];
-
-                // var_dump($oa);
-                // $oar = $oa !== '%' ? $this->replaceMsisdnWithRandomNumbers($oa): $oa;
-                // var_dump($oar);
 
                 $oaCommon = $this->generateMSISDN($trafficType);
                 $daCommon = $this->generateMSISDN('local_onnet');
 
                 $da = $da === '%' ? $daCommon : $da;
-                $oa = $oa === '%' ? $oaCommon : $oa;
 
                 $oaType = (substr($oa, 0, 2) === '94') ? 'local' : 'international';
+
+                $isLocal = $oaType === 'local' ;
+
+                $processedOa = $this->generateCallingGT($oa, $isLocal);
+                $oa= $processedOa;
+
+                $oa = $oa === '%' ? $oaCommon : $oa;
+
+                $processedCallingGT = $this->generateCallingGT($callingGt, $isLocal);
+                $callingGt = $processedCallingGT;
 
                 $smscGt = $oaType === 'local'
                     ? $this->faker->randomElement(explode(',', $_ENV['OLO_SMSC_GT']))
@@ -576,6 +581,7 @@ class CdrSmsTableController
                     'sri_error_minor' => $sriErrorMinor,
                     'error_description' => $errorDescription,
                     'sri_error_description' => $sriErrorDescription,
+                    'content'=> $selectedRule['content']
                 ];
 
                 $commonSMSMTValue[] = $record;
@@ -587,8 +593,6 @@ class CdrSmsTableController
             throw new Exception('Error generating common values: ' . $e->getMessage());
         }
     }
-
-
 
     /**
      * Generate SMPP fields for SMS records within a specified date range.
@@ -1032,8 +1036,8 @@ class CdrSmsTableController
                     $this->generateSMSMORecords($numSmsmoOlo, 'local_olo', $currentStartDate, $currentEndDate, $csvFile);
                     $this->generateSMSMORecords($numSmsmoIntl, 'international', $currentStartDate, $currentEndDate, $csvFile);
 
-                    $this->generateSRISMSMTRecords('local_olo', $currentStartDate, $currentEndDate, $numSmsmtOlo, $csvFile);
-                    $this->generateSRISMSMTRecords('international', $currentStartDate, $currentEndDate, $numSmsmtIntl, $csvFile);
+                    // $this->generateSRISMSMTRecords('local_olo', $currentStartDate, $currentEndDate, $numSmsmtOlo, $csvFile);
+                    // $this->generateSRISMSMTRecords('international', $currentStartDate, $currentEndDate, $numSmsmtIntl, $csvFile);
 
                     $this->generateSRISMSMTRecordsWithLegacyRules('local_olo', $startDate, $endDate, $numSmsmtOlo, $csvFile);
                     $this->generateSRISMSMTRecordsWithLegacyRules('international', $startDate, $endDate, $numSmsmtIntl, $csvFile);
@@ -1083,8 +1087,8 @@ class CdrSmsTableController
                 $this->generateSMSMORecords($numSmsmoOlo, 'local_olo', $startDate, $endDate, $csvFile);
                 $this->generateSMSMORecords($numSmsmoIntl, 'international', $startDate, $endDate, $csvFile);
 
-                $this->generateSRISMSMTRecords('local_olo', $startDate, $endDate, $numSmsmtOlo, $csvFile);
-                $this->generateSRISMSMTRecords('international', $startDate, $endDate, $numSmsmtIntl, $csvFile);
+                // $this->generateSRISMSMTRecords('local_olo', $startDate, $endDate, $numSmsmtOlo, $csvFile);
+                // $this->generateSRISMSMTRecords('international', $startDate, $endDate, $numSmsmtIntl, $csvFile);
 
                 $this->generateSRISMSMTRecordsWithLegacyRules('local_olo', $startDate, $endDate, $numSmsmtOlo, $csvFile);
                 $this->generateSRISMSMTRecordsWithLegacyRules('international', $startDate, $endDate, $numSmsmtIntl, $csvFile);

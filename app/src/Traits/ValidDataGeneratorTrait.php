@@ -251,24 +251,61 @@ trait ValidDataGeneratorTrait
      *     - 'tpdu_length' (int): The length of the TPDU (Transport Protocol Data Unit) in characters.
      */
 
-    private function generateSMSContent(int $numParts, bool $isUnicode): array
+    // private function generateSMSContent(int $numParts, bool $isUnicode): array
+    // {
+    //     $contentParts = [];
+
+    //     $partLength = $isUnicode ? 67 : 153;
+
+    //     // Generate a long content text
+    //     $longConLength = $partLength * $numParts * 2;
+    //     $longContent = $this->faker->realtext($longConLength);
+
+    //     for ($part = 1; $part <= $numParts; $part++) {
+    //         if ($numParts === 1) {
+    //             $charLength = $isUnicode ? rand(1, 70) : rand(1, 160);
+    //         } elseif ($part === $numParts) {
+    //             $charLength = $isUnicode ? rand(1, 67) : rand(1, 153);
+    //         } else {
+    //             $charLength = $partLength;
+    //         }
+
+    //         $content = mb_substr($longContent, 0, $charLength);
+    //         $longContent = mb_substr($longContent, $charLength);
+
+    //         $tpduLength = mb_strlen($content);
+
+    //         $isUnicode && $content = $this->addUnicodeCharacter($content);
+
+    //         $contentParts[] = [
+    //             'msg_part' => $part,
+    //             'msg_parts' => $numParts,
+    //             'content' => $content,
+    //             'tpdu_length' => $tpduLength,
+    //         ];
+    //     }
+
+    //     return $contentParts;
+    // }
+
+
+    private function generateSMSContent(int $numParts, bool $isUnicode, ?string $legacyPattern = null): array
     {
         $contentParts = [];
-
         $partLength = $isUnicode ? 67 : 153;
 
         // Generate a long content text
-        $longConLength = $partLength * $numParts * 2;
+        $longConLength = $partLength * $numParts;
         $longContent = $this->faker->realtext($longConLength);
 
+        if ($legacyPattern && $legacyPattern !== '%') {
+            $longContent = $this->injectLegacyPattern($longContent, $legacyPattern);
+        }
+
         for ($part = 1; $part <= $numParts; $part++) {
-            if ($numParts === 1) {
-                $charLength = $isUnicode ? rand(1, 70) : rand(1, 160);
-            } elseif ($part === $numParts) {
-                $charLength = $isUnicode ? rand(1, 67) : rand(1, 153);
-            } else {
-                $charLength = $partLength;
-            }
+            $charLength = ($numParts === 1)
+                ? ($isUnicode ? rand(1, 70) : rand(1, 160))
+                : ($part === $numParts ? ($isUnicode ? rand(1, 67) : rand(1, 153)) : $partLength);
 
             $content = mb_substr($longContent, 0, $charLength);
             $longContent = mb_substr($longContent, $charLength);
@@ -286,6 +323,34 @@ trait ValidDataGeneratorTrait
         }
 
         return $contentParts;
+    }
+
+    /**
+     * Injects the legacy pattern into the content, ensuring it matches SQL `LIKE` patterns.
+     */
+    private function injectLegacyPattern(string $content, string $legacyPattern): string
+    {
+        $cleanPattern = str_replace('%', ' ', $legacyPattern);
+
+        if (str_starts_with($legacyPattern, '%') && str_ends_with($legacyPattern, '%')) {
+            // Pattern should appear anywhere in the content
+            $insertionPosition = rand(0, mb_strlen($content) - mb_strlen($cleanPattern));
+            $content = mb_substr($content, 0, $insertionPosition) . $cleanPattern . mb_substr($content, $insertionPosition);
+        } elseif (str_starts_with($legacyPattern, '%')) {
+            // Pattern should appear at the end
+            $content = mb_substr($content, 0, mb_strlen($content) - mb_strlen($cleanPattern)) . $cleanPattern;
+        } elseif (str_ends_with($legacyPattern, '%')) {
+            // Pattern should appear at the start
+            $content = $cleanPattern . mb_substr($content, mb_strlen($cleanPattern));
+        } else {
+            // Exact match (not common in LIKE patterns)
+            $content = $cleanPattern;
+        }
+
+        // Trim the content to original length to ensure length consistency
+        $content = mb_substr($content, 0, mb_strlen($content));
+
+        return $content;
     }
 
 
@@ -464,13 +529,216 @@ trait ValidDataGeneratorTrait
         }
 
         $msisdnArray = array_merge(
-            array_slice($msisdnArray, 0, -7), 
-            $lastDigits 
+            array_slice($msisdnArray, 0, -7),
+            $lastDigits
         );
 
         // Convert back to a string
         return implode('', $msisdnArray);
     }
 
-    
+    function generateCallingGT(string $callingGT, bool $isLocal): string
+    {
+        $localPrefixes = ['94'];
+        // $intlPrefixes = ['1', '44'];
+
+        // Determine if the number is local or international based on the prefix
+        $isLocal = false;
+
+        foreach ($localPrefixes as $prefix) {
+            if (strpos($callingGT, $prefix) === 0) {
+                $isLocal = true;
+                break;
+            }
+        }
+
+        $cc = $isLocal
+            ? ($_ENV['LOCAL_CC'] ?? null)
+            : ($_ENV['INTL_CC'] ?? null);
+        $ncArray = $isLocal
+            ? (isset($_ENV['OLO_NC']) ? explode(',', $_ENV['OLO_NC']) : [])
+            : (isset($_ENV['INTL_NC']) ? explode(',', $_ENV['INTL_NC']) : []);
+
+        // Validate CC and NC
+        if (empty($cc) || empty($ncArray)) {
+            throw new Exception("Environment variables 'LOCAL_CC' or 'OLO_NC' are not set or invalid.");
+        }
+
+        // If the input is just `%`, return it as-is
+        if ($callingGT === '%') {
+            return $callingGT;
+        }
+
+        $totalLength = $isLocal ? 11 : 13;
+
+        if (strpos($callingGT, '%') !== false) {
+            // If the pattern starts with specific digits (e.g., "947%")
+            if (preg_match('/^(\d+)%$/', $callingGT, $matches)) {
+                $fixedStart = $matches[1];
+                $remainingLength = $totalLength - strlen($fixedStart);
+                if ($remainingLength > 0) {
+                    $randomDigits = str_pad(mt_rand(0, pow(10, $remainingLength) - 1), $remainingLength, '0', STR_PAD_LEFT);
+                    return "{$fixedStart}{$randomDigits}";
+                }
+            }
+
+            // If the pattern ends with specific digits (e.g., "%2222")
+            if (preg_match('/^%(.*)$/', $callingGT, $matches)) {
+                $fixedEnd = $matches[1];
+                $remainingLength = $totalLength - strlen($fixedEnd) - strlen($cc) - 2; // Subtract CC and NC length
+                if ($remainingLength > 0) {
+                    $randomNC = $ncArray[array_rand($ncArray)];
+                    $randomMiddle = str_pad(mt_rand(0, pow(10, $remainingLength) - 1), $remainingLength, '0', STR_PAD_LEFT);
+                    return "{$cc}{$randomNC}{$randomMiddle}{$fixedEnd}";
+                }
+            }
+
+            // If the pattern has `%` in the middle (e.g., "947%222")
+            if (preg_match('/^(\d+)%(\d+)$/', $callingGT, $matches)) {
+                $fixedStart = $matches[1];
+                $fixedEnd = $matches[2];
+                $remainingLength = $totalLength - strlen($fixedStart) - strlen($fixedEnd);
+                if ($remainingLength > 0) {
+                    $randomMiddle = str_pad(mt_rand(0, pow(10, $remainingLength) - 1), $remainingLength, '0', STR_PAD_LEFT);
+                    return "{$fixedStart}{$randomMiddle}{$fixedEnd}";
+                }
+            }
+
+            // Fallback for unsupported patterns
+            throw new Exception("Unsupported pattern in calling_gt: {$callingGT}");
+        }
+        return $callingGT;
+    }
+
+    function processMSISDNforLegacyRules(string $callingGT, bool $isLocal): string
+    {
+        $localPrefixes = ['94'];
+        $intlPrefixes = ['975'];
+
+        // Determine if the number is local or international based on the prefix
+        $isLocal = false;
+
+        foreach ($localPrefixes as $prefix) {
+            if (strpos($callingGT, $prefix) === 0) {
+                $isLocal = true;
+                break;
+            }
+        }
+
+        $cc = $isLocal
+            ? ($_ENV['LOCAL_CC'] ?? null)
+            : ($_ENV['INTL_CC'] ?? null);
+        $ncArray = $isLocal
+            ? (isset($_ENV['OLO_NC']) ? explode(',', $_ENV['OLO_NC']) : [])
+            : (isset($_ENV['INTL_NC']) ? explode(',', $_ENV['INTL_NC']) : []);
+
+        // Validate CC and NC
+        if (empty($cc) || empty($ncArray)) {
+            throw new Exception("Environment variables 'LOCAL_CC' or 'OLO_NC' are not set or invalid.");
+        }
+
+        // If the input is just `%`, return it as-is
+        if ($callingGT === '%') {
+            return $callingGT;
+        }
+
+        $totalLength = $isLocal ? 11 : 13;
+
+        if (strpos($callingGT, '%') !== false) {
+            // If the pattern starts with specific digits (e.g., "947%")
+            if (preg_match('/^(\d+)%$/', $callingGT, $matches)) {
+                $fixedStart = $matches[1];
+                $remainingLength = $totalLength - strlen($fixedStart);
+                if ($remainingLength > 0) {
+                    $randomDigits = str_pad(mt_rand(0, pow(10, $remainingLength) - 1), $remainingLength, '0', STR_PAD_LEFT);
+                    return "{$fixedStart}{$randomDigits}";
+                }
+            }
+
+            // If the pattern ends with specific digits (e.g., "%2222")
+            if (preg_match('/^%(.*)$/', $callingGT, $matches)) {
+                $fixedEnd = $matches[1];
+                $remainingLength = $totalLength - strlen($fixedEnd) - strlen($cc) - 2; // Subtract CC and NC length
+                if ($remainingLength > 0) {
+                    $randomNC = $ncArray[array_rand($ncArray)];
+                    $randomMiddle = str_pad(mt_rand(0, pow(10, $remainingLength) - 1), $remainingLength, '0', STR_PAD_LEFT);
+                    return "{$cc}{$randomNC}{$randomMiddle}{$fixedEnd}";
+                }
+            }
+
+            // If the pattern has `%` in the middle (e.g., "947%222")
+            if (preg_match('/^(\d+)%(\d+)$/', $callingGT, $matches)) {
+                $fixedStart = $matches[1];
+                $fixedEnd = $matches[2];
+                $remainingLength = $totalLength - strlen($fixedStart) - strlen($fixedEnd);
+                if ($remainingLength > 0) {
+                    $randomMiddle = str_pad(mt_rand(0, pow(10, $remainingLength) - 1), $remainingLength, '0', STR_PAD_LEFT);
+                    return "{$fixedStart}{$randomMiddle}{$fixedEnd}";
+                }
+            }
+
+            // Fallback for unsupported patterns
+            throw new Exception("Unsupported pattern in calling_gt: {$callingGT}");
+        }
+        return $callingGT;
+    }
+
+    private function validateAgainstQueries(array $data): string
+    {
+        $pdo = $this->pdoReporting;
+
+        // Check against `legacy_whitelists`
+        $whitelistSql = "
+        SELECT id 
+        FROM legacy_whitelists 
+        WHERE deleted_at IS NULL 
+        AND :GT LIKE calling_gt 
+        AND :SMSC LIKE map_gt 
+        AND (:MSISDN LIKE da OR :IMSI LIKE da)  
+        AND (oa = :oa OR (wildcard_oa = 1 AND :oa LIKE oa))
+        AND :content LIKE content
+    ";
+
+        $whitelistStmt = $pdo->prepare($whitelistSql);
+        $whitelistStmt->execute([
+            ':GT' => $data['GT'] ?? '',
+            ':SMSC' => $data['SMSC'] ?? '',
+            ':MSISDN' => $data['MSISDN'] ?? '',
+            ':IMSI' => $data['IMSI'] ?? '',
+            ':oa' => $data['oa'] ?? '',
+            ':content' => $data['content'] ?? '',
+        ]);
+
+        if ($whitelistStmt->rowCount() > 0) {
+            return 'success';
+        }
+
+        // Check against `legacy_rules`
+        $rulesSql = "
+        SELECT id 
+        FROM legacy_rules 
+        WHERE deleted_at IS NULL 
+        AND (:GT LIKE calling_gt)
+        AND (:SMSC LIKE map_gt)
+        AND (:MSISDN LIKE da OR :IMSI LIKE da)
+        AND (oa = :oa OR (wildcard_oa = 1 AND :oa LIKE oa))
+        AND :content LIKE content
+    ";
+
+        $rulesStmt = $pdo->prepare($rulesSql);
+        $rulesStmt->execute([
+            ':GT' => $data['GT'] ?? '',
+            ':SMSC' => $data['SMSC'] ?? '',
+            ':MSISDN' => $data['MSISDN'] ?? '',
+            ':IMSI' => $data['IMSI'] ?? '',
+            ':oa' => $data['oa'] ?? '',
+            ':content' => $data['content'] ?? '',
+        ]);
+
+        if ($rulesStmt->rowCount() > 0) {
+            return 'failed'; 
+        }
+
+        return 'unknown'; 
+    }
 }
