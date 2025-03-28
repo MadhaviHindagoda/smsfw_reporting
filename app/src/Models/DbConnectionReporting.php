@@ -14,7 +14,7 @@ $dotenv->load();
 
 class DbConnectionReporting
 {
-    private $connection;
+    private $conn;
     private static $_instance = null;
 
     private function __construct()
@@ -32,10 +32,10 @@ class DbConnectionReporting
         $port = $_ENV['DB_PORT_REPORTING'];
 
         try {
-            $this->connection = new PDO("mysql:host={$serverName};port={$port};dbname={$dbName}", $userName, $password);
-            $this->connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-            $this->connection->setAttribute(PDO::MYSQL_ATTR_LOCAL_INFILE, true);
-            $this->connection->setAttribute(PDO::MYSQL_ATTR_LOCAL_INFILE_DIRECTORY, true);
+            $this->conn = new PDO("mysql:host={$serverName};port={$port};dbname={$dbName}", $userName, $password);
+            $this->conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            $this->conn->setAttribute(PDO::MYSQL_ATTR_LOCAL_INFILE, true);
+            $this->conn->setAttribute(PDO::MYSQL_ATTR_LOCAL_INFILE_DIRECTORY, true);
             echo "Connection Success....";
             Logging::logInfo('DB connection success for smsfw_php8_reporting');
         } catch (PDOException $e) {
@@ -56,7 +56,7 @@ class DbConnectionReporting
 
     public function getConnection()
     {
-        return $this->connection;
+        return $this->conn;
     }
 }
 
